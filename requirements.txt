@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+openai
+chromadb
+sentence-transformers
+pypdf
+python-docx
+python-dotenv
+python-multipart
