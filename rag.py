@@ -4,6 +4,11 @@ import os
 from pathlib import Path
 from typing import Any
 
+from win_runtime import preload_vc_runtime
+
+# Must run before torch/chromadb import their native extensions (see win_runtime.py).
+preload_vc_runtime()
+
 import chromadb
 from sentence_transformers import SentenceTransformer
 

@@ -33,7 +33,7 @@ client = AsyncOpenAI(
     max_retries=0,  # Retries can exceed a voice webhook's deadline.
 )
 
-SYSTEM_PROMPT = """You are FarmVoice, a careful agricultural information assistant for farmers.
+SYSTEM_PROMPT = """You are AgroBridge, a careful agricultural information assistant for farmers.
 Use only the supplied knowledge excerpts for specific agricultural facts or recommendations.
 If the excerpts do not support a reliable answer, say you are not certain and ask one short
 clarifying question or suggest contacting a local agricultural extension officer.
@@ -127,7 +127,7 @@ async def answer_farmer(question: str) -> str:
 async def lifespan(_: FastAPI):
     # Warm up the local embedding model before the first live call.
     try:
-        await run_in_threadpool(lambda: (get_model().get_sentence_embedding_dimension(), get_collection().count()))
+        await run_in_threadpool(lambda: (get_model().get_embedding_dimension(), get_collection().count()))
         logger.info("Knowledge base and embedding model ready at %s", DB_DIR)
     except Exception:
         logger.exception("Could not initialize the local knowledge base")
@@ -163,8 +163,8 @@ async def handle_voicebip_webhook(request: Request):
         return JSONResponse({"response": reply, "text": reply})
 
     return JSONResponse({
-        "response": "Hello from FarmVoice. Please tell me what crop or animal you need help with.",
-        "text": "Hello from FarmVoice. Please tell me what crop or animal you need help with.",
+        "response": "Hello from AgroBridge. Please tell me what crop or animal you need help with.",
+        "text": "Hello from AgroBridge. Please tell me what crop or animal you need help with.",
     })
 
 

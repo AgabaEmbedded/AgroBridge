@@ -70,12 +70,14 @@ def main() -> None:
     ids: list[str] = []
     texts: list[str] = []
     metadatas: list[dict[str, str | int]] = []
+    source_count = 0
 
     for path in files:
         text = clean_text(extract_text(path))
         if not text:
             print(f"Skipping empty/unextractable file: {path.name}")
             continue
+        source_count += 1
 
         relative_path = str(path.relative_to(DOCUMENTS_DIR))
         chunks = chunk_text(text)
@@ -105,7 +107,7 @@ def main() -> None:
         )
         print(f"Indexed {min(end, len(texts))}/{len(texts)} chunks")
 
-    print(f"Done: indexed {len(texts)} chunks from {len(files)} document(s).")
+    print(f"Done: indexed {len(texts)} chunks from {source_count} document(s).")
     print("Note: scanned/image-only PDFs need OCR before ingestion.")
 
 

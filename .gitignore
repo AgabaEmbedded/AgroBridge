@@ -1,6 +1,10 @@
 *.pdf
 venv/
-.env.example
+.venv/
+.env
+.env.*
+!.env.example
+chroma_db/
 .omp/
 description.docx
 documents/
