@@ -8,6 +8,7 @@ the validation error when the model returns malformed content. Transport errors 
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Type, TypeVar
 
@@ -19,6 +20,7 @@ from services.config import settings
 T = TypeVar("T", bound=BaseModel)
 
 _client: AsyncOpenAI | None = None
+logger = logging.getLogger("agrobridge.llm")
 
 
 class LLMServiceError(RuntimeError):
@@ -86,13 +88,25 @@ async def chat_json(
         try:
             completion = await get_client().chat.completions.create(**request)
         except Exception as exc:  # network, timeout, provider errors
-            raise LLMServiceError(f"LLM request failed: {type(exc).__name__}") from exc
+            logger.warning("LLM request failed: %s: %s", type(exc).__name__, str(exc)[:300])
+            raise LLMServiceError(
+                f"LLM request failed: {type(exc).__name__}: {str(exc)[:200]}"
+            ) from exc
 
         content = (completion.choices[0].message.content or "").strip()
         try:
             return schema.model_validate(json.loads(_json_slice(content)))
         except (ValueError, ValidationError) as exc:
             last_error = exc
+            if completion.choices[0].finish_reason == "length" and attempt == 0:
+                request["max_tokens"] = min(4000, int(request["max_tokens"]) * 2)
+            logger.warning(
+                "invalid structured output (attempt %s): %s | finish=%s | content=%r",
+                attempt,
+                str(exc)[:300],
+                completion.choices[0].finish_reason,
+                content[:500],
+            )
             if attempt == 0:
                 messages.append({"role": "assistant", "content": content[:4000] or "{}"})
                 messages.append(

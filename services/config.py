@@ -55,6 +55,8 @@ class Settings:
     llm_timeout_seconds: float = field(default_factory=lambda: _env_float("LLM_TIMEOUT_SECONDS", 8.0))
     agent_timeout_seconds: float = field(default_factory=lambda: _env_float("AGENT_TIMEOUT_SECONDS", 45.0))
     max_output_tokens: int = field(default_factory=lambda: _env_int("MAX_OUTPUT_TOKENS", 220))
+    qa_answer_max_tokens: int = field(default_factory=lambda: _env_int("QA_ANSWER_MAX_TOKENS", 320))
+    verifier_max_tokens: int = field(default_factory=lambda: _env_int("VERIFIER_MAX_TOKENS", 300))
     temperature: float = field(default_factory=lambda: _env_float("LLM_TEMPERATURE", 0.2))
 
     # Retrieval.
@@ -71,13 +73,14 @@ class Settings:
     # Gap-analysis workflow.
     gap_max_rounds: int = field(default_factory=lambda: _env_int("GAP_MAX_ROUNDS", 2))
     gap_timeout_seconds: float = field(default_factory=lambda: _env_float("GAP_TIMEOUT_SECONDS", 240.0))
-    gap_max_output_tokens: int = field(default_factory=lambda: _env_int("GAP_MAX_OUTPUT_TOKENS", 1200))
+    gap_max_output_tokens: int = field(default_factory=lambda: _env_int("GAP_MAX_OUTPUT_TOKENS", 900))
 
     # Conversation memory (voice turns).
     history_max_messages: int = field(default_factory=lambda: _env_int("HISTORY_MAX_MESSAGES", 8))
     history_ttl_seconds: float = field(default_factory=lambda: _env_float("HISTORY_TTL_SECONDS", 1800))
 
     debug_api_token: str = field(default_factory=lambda: _env("DEBUG_API_TOKEN", ""))
+    gap_api_token: str = field(default_factory=lambda: _env("GAP_API_TOKEN", ""))
     audit_enabled: bool = field(default_factory=lambda: _env_bool("AUDIT_ENABLED", True))
 
 
