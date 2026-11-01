@@ -193,5 +193,15 @@ python tests/smoke_test.py --graph gap
 They call the real embedding model and LLM, and assert citation containment, revision limits,
 communication between GA1/GA2 and audit records.
 
-Troubleshooting: see the previous notes on the Windows VC++ runtime (`WinError 1114`), first-run
-model download and scanned PDFs.
+## Troubleshooting
+
+- **`WinError 1114` / `1114 c10.dll` / silent exit 5 on Windows:** System32's Visual C++ runtime is
+  older than torch/chromadb expect. Install the latest *Microsoft Visual C++ Redistributable (x64)*,
+  or rely on `msvc-runtime` + `setup_windows_runtime.py` (the embedding service also preloads it).
+- **First request is slow:** importing `transformers`/`sentence-transformers` takes 1–4 minutes on
+  older CPUs. The lifespan hook warms the model; the first real turn is then ~2 s.
+- **`indexed_chunks` is 0:** run `python ingest.py`. Files must be under `documents/KB1` or
+  `documents/KB2`; files directly in `documents/` are ignored.
+- **Scanned PDFs:** no extractable text means the file is skipped; OCR it first.
+- **Old index:** the pre-multi-agent `agrobridge_knowledge` collection is unused; delete it with
+  `python ingest.py --drop-legacy`.
