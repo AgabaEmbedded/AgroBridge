@@ -25,7 +25,7 @@ async def handle_voicebip_webhook(request: Request):
         
         # Here is where you can later plug in OpenAI! 
         # For now, let's reply with a dynamic response acknowledging what they said.
-        ai_reply = f"Hello! I heard you say: {farmer_speech}. How can Farm Direct help your crops today?"
+        ai_reply = f"Hello! I heard you say: {farmer_speech}. How can AgroBridge help your crops today?"
         
         # Voicebip BYOM expects the response text under 'response' (and sometimes 'text')
         return JSONResponse({
@@ -35,7 +35,7 @@ async def handle_voicebip_webhook(request: Request):
         
     # Fallback default response
     return JSONResponse({
-        "response": "Hello from Farm Direct! How can I help you today?"
+        "response": "Hello from AgroBridge! How can I help you today?"
     })
 
 if __name__ == "__main__":

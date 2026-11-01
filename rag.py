@@ -10,11 +10,12 @@ from win_runtime import preload_vc_runtime
 preload_vc_runtime()
 
 import chromadb
+from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_DIR = BASE_DIR / "chroma_db"
-COLLECTION_NAME = "farmvoice_knowledge"
+COLLECTION_NAME = "agrobridge_knowledge"
 
 # Multilingual embedding model is a reasonable starting point, not a guarantee of
 # strong Hausa retrieval. Evaluate it with real Hausa farmer questions.
@@ -34,7 +35,10 @@ def get_model() -> SentenceTransformer:
 def get_collection():
     global _collection
     if _collection is None:
-        client = chromadb.PersistentClient(path=str(DB_DIR))
+        client = chromadb.PersistentClient(
+            path=str(DB_DIR),
+            settings=Settings(anonymized_telemetry=False),
+        )
         _collection = client.get_or_create_collection(
             name=COLLECTION_NAME,
             metadata={"hnsw:space": "cosine"},

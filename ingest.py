@@ -92,22 +92,37 @@ def main() -> None:
         return
 
     collection = get_collection()
-    # Rebuilding the collection avoids stale chunks when documents change or are removed.
-    collection.delete(where={"source": {"$ne": "__never_matches__"}}) if collection.count() else None
+    existing_ids = set(collection.get(include=[])["ids"])
+    desired_ids = set(ids)
+    stale_ids = sorted(existing_ids - desired_ids)
+    missing = [index for index, chunk_id in enumerate(ids) if chunk_id not in existing_ids]
+
+    if not missing and not stale_ids:
+        print(
+            f"Index already up to date: {len(desired_ids)} chunks from "
+            f"{source_count} document(s). Nothing to embed."
+        )
+        return
+
+    if stale_ids:
+        collection.delete(ids=stale_ids)
+        print(f"Removed {len(stale_ids)} stale chunk(s) from changed or deleted documents")
 
     batch_size = 64
-    for start in range(0, len(texts), batch_size):
-        end = start + batch_size
-        batch_texts = texts[start:end]
+    for start in range(0, len(missing), batch_size):
+        batch_indexes = missing[start : start + batch_size]
         collection.upsert(
-            ids=ids[start:end],
-            documents=batch_texts,
-            metadatas=metadatas[start:end],
-            embeddings=embed_passages(batch_texts),
+            ids=[ids[index] for index in batch_indexes],
+            documents=[texts[index] for index in batch_indexes],
+            metadatas=[metadatas[index] for index in batch_indexes],
+            embeddings=embed_passages([texts[index] for index in batch_indexes]),
         )
-        print(f"Indexed {min(end, len(texts))}/{len(texts)} chunks")
+        print(f"Embedded {min(start + batch_size, len(missing))}/{len(missing)} new chunk(s)")
 
-    print(f"Done: indexed {len(texts)} chunks from {source_count} document(s).")
+    print(
+        f"Done: {len(missing)} new chunk(s) embedded, {len(stale_ids)} stale removed, "
+        f"{len(desired_ids)} total from {source_count} document(s)."
+    )
     print("Note: scanned/image-only PDFs need OCR before ingestion.")
 
 

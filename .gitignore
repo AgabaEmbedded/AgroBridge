@@ -5,6 +5,8 @@ venv/
 .env.*
 !.env.example
 chroma_db/
+candidate_documents/
+logs/
 .omp/
 description.docx
 documents/

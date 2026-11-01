@@ -1,4 +1,4 @@
-# AgroBridge / FarmVoice
+# AgroBridge
 
 Small FastAPI webhook + local Chroma vector index + DeepSeek API. Voicebip posts call events to `/`; a `turn` event is answered from the indexed agricultural documents.
 
@@ -33,7 +33,7 @@ Put text-based PDF, DOCX, TXT, or Markdown documents in `documents/`, then run:
 python ingest.py
 ```
 
-`ingest.py` rebuilds the `farmvoice_knowledge` collection and upserts stable-ID chunks, so it is safe to re-run. The first run also downloads `intfloat/multilingual-e5-small` (~470 MB) to the Hugging Face cache. Scanned PDFs need OCR first. Keep source URLs and publication dates in filenames or text, and remove superseded guidance.
+`ingest.py` keeps the persistent `agrobridge_knowledge` collection in sync instead of rebuilding it: chunk IDs are content hashes, so unchanged chunks are skipped, only new chunks are embedded, and chunks from edited or removed documents are deleted. Re-running it on an unchanged corpus is near-instant. The first run also downloads `intfloat/multilingual-e5-small` (~470 MB) to the Hugging Face cache. Scanned PDFs need OCR first. Keep source URLs and publication dates in filenames or text, and remove superseded guidance.
 
 ## 4. Run the API
 
@@ -41,6 +41,18 @@ python ingest.py
 python app.py
 # or: uvicorn app:app --host 0.0.0.0 --port 8000
 ```
+
+Logs go to stdout and to `logs/agrobridge.log` (uvicorn access lines included), so failures are diagnosable after the terminal closes.
+
+Run detached from the terminal/session on Windows (survives shell exit):
+
+```powershell
+Start-Process -FilePath venv\Scripts\python.exe -ArgumentList '-u','app.py' `
+  -WorkingDirectory (Get-Location) -WindowStyle Hidden `
+  -RedirectStandardOutput logs\server.out.log -RedirectStandardError logs\server.err.log
+```
+
+On macOS/Linux use `nohup venv/bin/python -u app.py >> logs/server.out.log 2>&1 &`.
 
 Test health:
 
@@ -58,6 +70,41 @@ curl -X POST http://localhost:8000/ \
 
 `/health` reports `indexed_chunks`; `null` means the local Chroma index or embedding model failed to load (check the server log).
 
+## 5. Conversation memory
+
+Turns are remembered for the duration of a call so follow-ups ("what about for goats?") keep context.
+
+- Key: `conversation_id`, `call_id`, `call_sid` or `session_id` from the webhook payload. If none is present, a shortened SHA-256 of the caller number is used; raw numbers are never stored. With neither, the turn is answered statelessly rather than sharing memory with other callers.
+- Scope: last `HISTORY_MAX_MESSAGES` messages (default 8, i.e. four exchanges) per conversation, expiring after `HISTORY_TTL_SECONDS` (default 1800).
+- Storage: process memory only — nothing is written to disk, and memory is not shared across multiple uvicorn workers.
+
+For debugging, `POST /debug/ask` accepts `conversation_id` (and `reset_history: true` to clear it) and returns `history_used`, the number of prior messages sent to the model.
+
+## 6. Debug from the terminal
+
+`POST /debug/ask` answers a question and returns the retrieved chunks, distances, stage and timings. Requests from localhost are always allowed; remote callers need `DEBUG_API_TOKEN` in `.env` and must send it as `X-Debug-Token`.
+
+```bash
+python debug_client.py "What causes yellow maize leaves?"
+python debug_client.py --top-k 6 "How do I prevent Newcastle disease?"
+python debug_client.py            # interactive prompt
+python debug_client.py --conversation demo "my name is Sunday"
+python debug_client.py --conversation demo "what did I say my name was?"   # remembers
+python debug_client.py --conversation demo --reset "start over"
+```
+
+The client sends a `conversation_id` on every request so memory works; interactive runs generate one automatically, and `--conversation` reuses it across runs.
+
+Raw HTTP:
+
+```bash
+curl -X POST http://localhost:8000/debug/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question":"What causes yellow maize leaves?","top_k":4}'
+```
+
+The response reports `stage` (`ok`, `empty_question`, `no_relevant_chunks`, `retrieval_error`, `llm_error`, `empty_completion`), every hit's `distance` and `used` flag, and `retrieval_ms` / `llm_ms` / `total_ms`.
+
 ## Troubleshooting
 
 - **`OSError: [WinError 1114] ... c10.dll`, `WinError 126 ... shm.dll`, or an access violation / silent exit (code 5) in chromadb**: the machine-wide Visual C++ runtime is older than these wheels require. Preferred fix: install the latest *Microsoft Visual C++ Redistributable (x64)*, then restart the shell. Without admin rights, `requirements.txt` installs `msvc-runtime` and `setup_windows_runtime.py` copies its 14.51 DLLs into the directories each native extension searches (`torch/lib`, `chromadb_rust_bindings/`). `rag.py` additionally preloads them via `win_runtime.py` as a safety net.
@@ -67,7 +114,6 @@ curl -X POST http://localhost:8000/ \
 
 ## Security notes
 
-- `outbound_call.py` reads `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `TWILIO_TO_NUMBER` from the environment. Earlier revisions hard-coded a Twilio SID/auth token; **rotate that auth token** in the Twilio console before pushing anywhere, since it exists in local git history.
 - `python app.py` binds `0.0.0.0:8000` with no authentication. Keep it on localhost (`--host 127.0.0.1`) or put it behind a reverse proxy that enforces the provider's webhook signature before exposing it.
 - Logs record the transcription event and the model name only; do not add caller numbers or other personal data.
 
