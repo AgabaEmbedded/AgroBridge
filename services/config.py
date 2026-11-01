@@ -81,6 +81,16 @@ class Settings:
 
     debug_api_token: str = field(default_factory=lambda: _env("DEBUG_API_TOKEN", ""))
     gap_api_token: str = field(default_factory=lambda: _env("GAP_API_TOKEN", ""))
+    frontend_origins: list[str] = field(
+        default_factory=lambda: [
+            item.strip()
+            for item in _env(
+                "FRONTEND_ORIGINS",
+                "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174",
+            ).split(",")
+            if item.strip()
+        ]
+    )
     audit_enabled: bool = field(default_factory=lambda: _env_bool("AUDIT_ENABLED", True))
 
 

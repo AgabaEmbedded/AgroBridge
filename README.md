@@ -132,7 +132,14 @@ python app.py
 Logs: stdout and `logs/agrobridge.log`. Audit: `logs/audit-YYYY-MM-DD.jsonl` (one record per
 workflow request, with agent outputs, KB citations, verification/revision history and timings).
 
-## API
+## Frontend (Gap Analysis)
+
+The React + Vite interface lives in `frontend/` and calls only `POST /api/gap-analysis` and
+`GET /health`. It presents the four gap categories, evidence status, citations, an expandable
+agent execution trace and a `tel:` button for the phone-based Farmer Assistant. Start it with
+`cd frontend && npm install && npm run dev`; full setup, CORS and backend-gap notes are in
+`build_instructions/frontend_run_instructions.md`.
+
 
 ### `POST /` — Voicebip webhook
 

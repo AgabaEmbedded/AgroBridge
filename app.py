@@ -11,6 +11,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -195,6 +196,14 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="AgroBridge", version="0.2.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.frontend_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Gap-Token", "X-Debug-Token"],
+)
 
 
 @app.get("/health")
