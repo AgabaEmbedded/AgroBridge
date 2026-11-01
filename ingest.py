@@ -1,129 +1,82 @@
+"""Ingest documents into the two isolated knowledge bases.
+
+Usage:
+    python ingest.py                 # sync KB1 and KB2
+    python ingest.py --kb KB1        # only agriculture
+    python ingest.py --kb KB2        # only policy
+    python ingest.py --drop-legacy   # also delete the old single-collection index
+
+Chunks are content-addressed, so re-running only embeds new/changed chunks and removes
+chunks whose source document was edited or deleted.
+"""
+
 from __future__ import annotations
 
-import hashlib
-import re
+import argparse
 from pathlib import Path
 
-from docx import Document
-from pypdf import PdfReader
+from services.config import settings
+from services.document_processor import SUPPORTED_SUFFIXES, build_kb_records, sync_collection
+from services.retrieval_service import get_client, get_collection
 
-from rag import BASE_DIR, embed_passages, get_collection
-
-DOCUMENTS_DIR = BASE_DIR / "documents"
-SUPPORTED_SUFFIXES = {".pdf", ".docx", ".txt", ".md"}
-CHUNK_SIZE = 1_000
-CHUNK_OVERLAP = 150
+LEGACY_COLLECTION = "agrobridge_knowledge"
 
 
-def extract_text(path: Path) -> str:
-    suffix = path.suffix.lower()
-    if suffix == ".pdf":
-        reader = PdfReader(str(path))
-        return "\n".join(page.extract_text() or "" for page in reader.pages)
-    if suffix == ".docx":
-        document = Document(str(path))
-        parts = [p.text for p in document.paragraphs if p.text.strip()]
-        for table in document.tables:
-            for row in table.rows:
-                parts.append(" | ".join(cell.text.strip() for cell in row.cells))
-        return "\n".join(parts)
-    return path.read_text(encoding="utf-8", errors="ignore")
+def ingest(kb: str) -> dict[str, int | str]:
+    kb = kb.upper()
+    folder = settings.documents_dir / kb
+    if not folder.exists():
+        print(f"{kb}: folder missing at {folder}")
+        return {"kb": kb, "added": 0, "removed": 0, "metadata_updated": 0, "total": 0}
+
+    records = build_kb_records(kb, folder)
+    collection = get_collection(kb)
+    if not records:
+        print(f"{kb}: no extractable text found in {folder}")
+        return {"kb": kb, "added": 0, "removed": 0, "metadata_updated": 0, "total": collection.count()}
+
+    stats = sync_collection(collection, records)
+    print(
+        f"{kb}: +{stats['added']} new, -{stats['removed']} stale, "
+        f"~{stats['metadata_updated']} metadata updated, {stats['total']} chunks total"
+    )
+    return {"kb": kb, **stats}
 
 
-def clean_text(text: str) -> str:
-    text = text.replace("\x00", " ")
-    text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
-
-
-def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
-    # Character-based chunks are intentionally simple. Split near paragraph/sentence
-    # boundaries where possible, while keeping overlap to preserve context.
-    chunks: list[str] = []
-    start = 0
-    while start < len(text):
-        end = min(start + size, len(text))
-        if end < len(text):
-            boundary = max(text.rfind("\n", start, end), text.rfind(". ", start, end))
-            if boundary > start + size // 2:
-                end = boundary + 1
-        chunk = text[start:end].strip()
-        if chunk:
-            chunks.append(chunk)
-        if end >= len(text):
-            break
-        start = max(end - overlap, start + 1)
-    return chunks
+def _warn_flat_files() -> None:
+    flat = [
+        path
+        for path in settings.documents_dir.glob("*")
+        if path.is_file() and path.suffix.lower() in SUPPORTED_SUFFIXES
+    ]
+    if flat:
+        print(
+            "Note: files directly in documents/ are ignored. "
+            "Move them into documents/KB1 or documents/KB2."
+        )
 
 
 def main() -> None:
-    if not DOCUMENTS_DIR.exists():
-        DOCUMENTS_DIR.mkdir(parents=True)
-
-    files = [p for p in DOCUMENTS_DIR.rglob("*") if p.is_file() and p.suffix.lower() in SUPPORTED_SUFFIXES]
-    if not files:
-        print(f"No supported documents found in {DOCUMENTS_DIR}")
-        print("Add PDF, DOCX, TXT, or Markdown files, then run this script again.")
-        return
-
-    ids: list[str] = []
-    texts: list[str] = []
-    metadatas: list[dict[str, str | int]] = []
-    source_count = 0
-
-    for path in files:
-        text = clean_text(extract_text(path))
-        if not text:
-            print(f"Skipping empty/unextractable file: {path.name}")
-            continue
-        source_count += 1
-
-        relative_path = str(path.relative_to(DOCUMENTS_DIR))
-        chunks = chunk_text(text)
-        for index, chunk in enumerate(chunks):
-            stable_id = hashlib.sha256(f"{relative_path}:{index}:{chunk}".encode("utf-8")).hexdigest()
-            ids.append(stable_id)
-            texts.append(chunk)
-            metadatas.append({"source": relative_path, "chunk": index + 1})
-
-    if not texts:
-        print("No extractable text found.")
-        return
-
-    collection = get_collection()
-    existing_ids = set(collection.get(include=[])["ids"])
-    desired_ids = set(ids)
-    stale_ids = sorted(existing_ids - desired_ids)
-    missing = [index for index, chunk_id in enumerate(ids) if chunk_id not in existing_ids]
-
-    if not missing and not stale_ids:
-        print(
-            f"Index already up to date: {len(desired_ids)} chunks from "
-            f"{source_count} document(s). Nothing to embed."
-        )
-        return
-
-    if stale_ids:
-        collection.delete(ids=stale_ids)
-        print(f"Removed {len(stale_ids)} stale chunk(s) from changed or deleted documents")
-
-    batch_size = 64
-    for start in range(0, len(missing), batch_size):
-        batch_indexes = missing[start : start + batch_size]
-        collection.upsert(
-            ids=[ids[index] for index in batch_indexes],
-            documents=[texts[index] for index in batch_indexes],
-            metadatas=[metadatas[index] for index in batch_indexes],
-            embeddings=embed_passages([texts[index] for index in batch_indexes]),
-        )
-        print(f"Embedded {min(start + batch_size, len(missing))}/{len(missing)} new chunk(s)")
-
-    print(
-        f"Done: {len(missing)} new chunk(s) embedded, {len(stale_ids)} stale removed, "
-        f"{len(desired_ids)} total from {source_count} document(s)."
+    parser = argparse.ArgumentParser(description="Ingest AgroBridge KB1/KB2 documents.")
+    parser.add_argument("--kb", choices=["all", "KB1", "KB2"], default="all")
+    parser.add_argument(
+        "--drop-legacy",
+        action="store_true",
+        help=f"Delete the pre-multi-agent '{LEGACY_COLLECTION}' collection",
     )
-    print("Note: scanned/image-only PDFs need OCR before ingestion.")
+    args = parser.parse_args()
+
+    _warn_flat_files()
+    targets = ["KB1", "KB2"] if args.kb == "all" else [args.kb]
+    for kb in targets:
+        ingest(kb)
+
+    if args.drop_legacy:
+        client = get_client()
+        names = {collection.name for collection in client.list_collections()}
+        if LEGACY_COLLECTION in names:
+            client.delete_collection(LEGACY_COLLECTION)
+            print(f"Deleted legacy collection {LEGACY_COLLECTION}")
 
 
 if __name__ == "__main__":

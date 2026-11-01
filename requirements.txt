@@ -9,7 +9,8 @@ pypdf==6.21.3
 python-docx==1.2.0
 python-dotenv==1.2.4
 python-multipart==0.0.32
+langgraph==1.2.19
 # Windows only: ships the Visual C++ 14.51 runtime DLLs that torch 2.14 and chromadb 1.5
 # need when the machine-wide redistributable is older. Run setup_windows_runtime.py after
-# install (rag.py also preloads them as a safety net). Harmless on macOS/Linux.
+# install (services/embedding_service.py also preloads them as a safety net). Harmless on macOS/Linux.
 msvc-runtime==14.51.36231; sys_platform == "win32"
