@@ -1,124 +1,197 @@
 # AgroBridge
 
-Small FastAPI webhook + local Chroma vector index + DeepSeek API. Voicebip posts call events to `/`; a `turn` event is answered from the indexed agricultural documents.
+Two independent AI workflows over a shared local knowledge base, generation model and audit
+trail:
 
-## 1. Install
+1. **Question-Answer (voice):** Voicebip posts farmer questions; the AgroBridge agent answers
+   from KB1, a policy verifier checks the recommendation against KB2, and unapproved drafts are
+   revised and rechecked (bounded loop).
+2. **Gap Analysis (web API):** a policy analyst (KB2) and an agricultural needs analyst (KB1)
+   exchange structured findings, then a synthesis node reports policy coverage, implementation,
+   institutional and evidence gaps.
 
-Use Python 3.12 (3.11 also works) in a virtual environment:
+The two graph definitions are separate (`agents/qa_graph.py`, `agents/gap_graph.py`); they share
+only services (LLM, embeddings, retrieval, ingestion, audit).
+
+## Architecture
+
+```text
+Voicebip POST /  ->  QA graph
+                       ├─ agrobridge agent  (KB1 search)
+                       ├─ verifier agent    (KB2 search)
+                       ├─ revision agent    (loop, max MAX_REVISIONS)
+                       └─ finalize          (voice-safe answer + audit)
+
+POST /api/gap-analysis -> Gap graph
+                       ├─ GA1 policy analyst        (KB2)
+                       ├─ GA2 agricultural needs    (KB1)
+                       ├─ communicate               (structured messages, GAP_MAX_ROUNDS)
+                       └─ synthesis                 (4 gap categories + citations)
+```
+
+## Directory
+
+```text
+services/
+  config.py             env-driven settings
+  llm_service.py        JSON structured outputs, validation, retry
+  embedding_service.py  local e5 model (query/passage prefixes)
+  retrieval_service.py  search_kb1 / search_kb2 / get_document
+  document_processor.py page-aware extraction + incremental sync
+  audit_service.py      JSONL audit records
+agents/
+  schemas.py            pydantic contracts
+  prompts.py            role prompts
+  evidence.py           evidence blocks + citation sanitising
+  runtime.py            budgets and timings
+  state.py              typed graph states
+  qa_agents.py          answer / verifier / revision / finalize
+  gap_agents.py         GA1 / GA2 / communication / synthesis
+  qa_graph.py           question-answer LangGraph
+  gap_graph.py          gap-analysis LangGraph
+documents/KB1/          agricultural manuals, guides, disease references
+documents/KB2/          policy, regulation, budget and implementation documents
+ingest.py               sync both knowledge bases
+app.py                  FastAPI entry points
+debug_client.py         terminal client for /debug/ask
+tests/smoke_test.py     integration checks (real embeddings + LLM)
+```
+
+## Install
+
+Python 3.12 (3.11 works). Windows: run `setup_windows_runtime.py` after installing requirements
+(see Troubleshooting).
 
 ```bash
 python -m venv venv
-# Windows PowerShell:
-venv\Scripts\Activate.ps1
-# macOS/Linux:
-# source venv/bin/activate
+venv\Scripts\Activate.ps1            # Windows
 pip install -r requirements.txt
-# Windows only (see Troubleshooting):
-python setup_windows_runtime.py
+python setup_windows_runtime.py      # Windows only
 ```
 
-Dependencies are pinned to versions verified on Windows 10 x64 + Python 3.12. On Windows, `msvc-runtime` ships the Visual C++ 14.51 runtime that torch 2.14 requires when the machine-wide redistributable is older; see Troubleshooting.
+Generation uses `deepseek-flash`; embeddings use `intfloat/multilingual-e5-small` locally. They
+are configured independently.
 
-## 2. Configure
+## Configure
 
-Copy `.env.example` to `.env` and set `DEEPSEEK_API_KEY`. `.env` is git-ignored; never commit real keys.
+Copy `.env.example` to `.env` and set `DEEPSEEK_API_KEY`. Nothing is hardcoded in agent code.
 
-The model ID `deepseek-flash` is served by `https://api.deepseek.com`; the app sends `thinking: {"type": "disabled"}` to keep responses inside the voice webhook's latency budget. Confirm current model IDs and pricing in DeepSeek's docs before deployment.
+| Variable | Default | Purpose |
+|---|---|---|
+| `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` | `deepseek-flash` / `https://api.deepseek.com` | generation provider |
+| `EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | local embeddings |
+| `TOP_K` | `4` | KB hits per QA agent call |
+| `MIN_RELEVANCE_DISTANCE` | `1.25` | provisional cosine filter |
+| `VERIFIER_ENABLED` | `true` | policy verification node |
+| `MAX_REVISIONS` | `2` | maximum revision attempts |
+| `QA_BUDGET_SECONDS` | `4.3` | hard budget for the voice workflow (Voicebip allows ~5 s) |
+| `QA_DEBUG_BUDGET_SECONDS` | `60` | budget for `/debug/ask` (full loop) |
+| `QA_ANSWER_MAX_TOKENS` / `VERIFIER_MAX_TOKENS` | `320` / `300` | structured output caps |
+| `GAP_MAX_ROUNDS` | `2` | agent communication rounds |
+| `GAP_TIMEOUT_SECONDS` | `240` | gap-analysis workflow budget |
+| `GAP_MAX_OUTPUT_TOKENS` | `900` | per-agent output cap |
+| `GAP_TOP_K` | `6` | KB hits per gap agent call |
+| `DEBUG_API_TOKEN` | empty | required for remote `/debug/ask` |
+| `GAP_API_TOKEN` | empty | if set, `X-Gap-Token` required on `/api/gap-analysis` |
+| `HISTORY_MAX_MESSAGES` / `HISTORY_TTL_SECONDS` | `8` / `1800` | in-process voice memory |
+| `AUDIT_ENABLED` | `true` | JSONL audit trail |
 
-## 3. Add documents and index
+`LLM_TIMEOUT_SECONDS` remains as an advisory ceiling; each agent call is also bounded by the
+workflow budget.
 
-Put text-based PDF, DOCX, TXT, or Markdown documents in `documents/`, then run:
+## Knowledge bases
+
+```text
+documents/KB1/   agriculture: crops, pests, livestock, soil, extension guides
+documents/KB2/   policy: strategies, regulations, budgets, implementation reports
+```
+
+Ingest (incremental, content-addressed):
 
 ```bash
-python ingest.py
+python ingest.py                 # KB1 + KB2
+python ingest.py --kb KB2        # one KB
+python ingest.py --drop-legacy   # also delete the old single-collection index
 ```
 
-`ingest.py` keeps the persistent `agrobridge_knowledge` collection in sync instead of rebuilding it: chunk IDs are content hashes, so unchanged chunks are skipped, only new chunks are embedded, and chunks from edited or removed documents are deleted. Re-running it on an unchanged corpus is near-instant. The first run also downloads `intfloat/multilingual-e5-small` (~470 MB) to the Hugging Face cache. Scanned PDFs need OCR first. Keep source URLs and publication dates in filenames or text, and remove superseded guidance.
+- PDFs keep page numbers; DOCX/TXT/MD are stored without page numbers.
+- Every chunk stores `document_id`, `document_name`, `knowledge_base`, `document_type`, `source`,
+  `publication_year`, `page_number` (when available), `category`, `source_path`, `chunk_index`.
+- Unchanged chunks are not re-embedded; edited/deleted documents have stale chunks removed.
+- Optional sidecar `<file>.meta.json` overrides metadata:
+  `{"title": "...", "document_type": "policy", "publication_year": 2024, "category": "livestock", "source": "https://..."}`
+- Scanned PDFs still need OCR before ingestion; a file with no extractable text is skipped.
 
-## 4. Run the API
+## Run
 
 ```bash
 python app.py
 # or: uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
-Logs go to stdout and to `logs/agrobridge.log` (uvicorn access lines included), so failures are diagnosable after the terminal closes.
+Logs: stdout and `logs/agrobridge.log`. Audit: `logs/audit-YYYY-MM-DD.jsonl` (one record per
+workflow request, with agent outputs, KB citations, verification/revision history and timings).
 
-Run detached from the terminal/session on Windows (survives shell exit):
+## API
 
-```powershell
-Start-Process -FilePath venv\Scripts\python.exe -ArgumentList '-u','app.py' `
-  -WorkingDirectory (Get-Location) -WindowStyle Hidden `
-  -RedirectStandardOutput logs\server.out.log -RedirectStandardError logs\server.err.log
-```
+### `POST /` — Voicebip webhook
 
-On macOS/Linux use `nohup venv/bin/python -u app.py >> logs/server.out.log 2>&1 &`.
-
-Test health:
+Unchanged contract. `turn` runs the full QA graph with the voice budget; other events are
+acknowledged as before (`call.idle_silence` asks the caller to repeat the question).
 
 ```bash
-curl http://localhost:8000/health
+curl -X POST http://localhost:8000/ -H "Content-Type: application/json" \
+  -d '{"event":"turn","call_id":"demo-1","transcription":"What are the signs of foot and mouth disease in cattle?"}'
+# -> {"response": "...", "text": "..."}
 ```
 
-Example webhook test:
+If verification finds a policy conflict that revision cannot resolve, the caller receives a safe
+referral instead of the unapproved advice. `NEEDS_REVIEW` answers are returned with a request to
+confirm with a local extension officer.
+
+### `POST /debug/ask` — full QA diagnostics
 
 ```bash
-curl -X POST http://localhost:8000/ \
-  -H "Content-Type: application/json" \
-  -d '{"event":"turn","transcription":"My maize leaves have yellow spots. What should I check?"}'
+python debug_client.py "What are the signs of foot and mouth disease in cattle?"
+# or
+curl -X POST http://localhost:8000/debug/ask -H "Content-Type: application/json" \
+  -d '{"question":"...","conversation_id":"demo"}'
 ```
 
-`/health` reports `indexed_chunks`; `null` means the local Chroma index or embedding model failed to load (check the server log).
+Returns the draft, verifier verdict (`APPROVED` / `UNAPPROVED` / `NEEDS_REVIEW`), revision count,
+KB1/KB2 hits with citations, per-node timings, audit id and both the raw answer and the
+`voice_answer`. Local requests need no token; remote requests require `X-Debug-Token`.
 
-## 5. Conversation memory
-
-Turns are remembered for the duration of a call so follow-ups ("what about for goats?") keep context.
-
-- Key: `conversation_id`, `call_id`, `call_sid` or `session_id` from the webhook payload. If none is present, a shortened SHA-256 of the caller number is used; raw numbers are never stored. With neither, the turn is answered statelessly rather than sharing memory with other callers.
-- Scope: last `HISTORY_MAX_MESSAGES` messages (default 8, i.e. four exchanges) per conversation, expiring after `HISTORY_TTL_SECONDS` (default 1800).
-- Storage: process memory only — nothing is written to disk, and memory is not shared across multiple uvicorn workers.
-
-For debugging, `POST /debug/ask` accepts `conversation_id` (and `reset_history: true` to clear it) and returns `history_used`, the number of prior messages sent to the model.
-
-## 6. Debug from the terminal
-
-`POST /debug/ask` answers a question and returns the retrieved chunks, distances, stage and timings. Requests from localhost are always allowed; remote callers need `DEBUG_API_TOKEN` in `.env` and must send it as `X-Debug-Token`.
+### `POST /api/gap-analysis`
 
 ```bash
-python debug_client.py "What causes yellow maize leaves?"
-python debug_client.py --top-k 6 "How do I prevent Newcastle disease?"
-python debug_client.py            # interactive prompt
-python debug_client.py --conversation demo "my name is Sunday"
-python debug_client.py --conversation demo "what did I say my name was?"   # remembers
-python debug_client.py --conversation demo --reset "start over"
+curl -X POST http://localhost:8000/api/gap-analysis -H "Content-Type: application/json" \
+  -d '{"query":"Identify gaps between Nigeria agricultural extension policy and livestock disease control needs","max_rounds":1}'
 ```
 
-The client sends a `conversation_id` on every request so memory works; interactive runs generate one automatically, and `--conversation` reuses it across runs.
+Returns `report` with `policy_coverage_gaps`, `implementation_gaps`, `institutional_gaps`,
+`evidence_gaps` (each item: description, commitment, practical need, implementation evidence,
+institution, citations, evidence_status, confidence), plus `communication`, agent findings,
+timings and `audit_id`. Each gap is labelled `confirmed_shortfall`, `potential_gap` or
+`insufficient_evidence`.
 
-Raw HTTP:
+### `GET /health`
+
+```json
+{"status":"ok","model":"deepseek-flash","indexed_chunks":546,"kb1_chunks":546,"kb2_chunks":254,
+ "verifier_enabled":true,"max_revisions":2,"qa_budget_seconds":4.3}
+```
+
+## Tests
 
 ```bash
-curl -X POST http://localhost:8000/debug/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question":"What causes yellow maize leaves?","top_k":4}'
+python tests/smoke_test.py            # retrieval + QA + revision path + gap analysis
+python tests/smoke_test.py --graph qa
+python tests/smoke_test.py --graph gap
 ```
 
-The response reports `stage` (`ok`, `empty_question`, `no_relevant_chunks`, `retrieval_error`, `llm_error`, `empty_completion`), every hit's `distance` and `used` flag, and `retrieval_ms` / `llm_ms` / `total_ms`.
+They call the real embedding model and LLM, and assert citation containment, revision limits,
+communication between GA1/GA2 and audit records.
 
-## Troubleshooting
-
-- **`OSError: [WinError 1114] ... c10.dll`, `WinError 126 ... shm.dll`, or an access violation / silent exit (code 5) in chromadb**: the machine-wide Visual C++ runtime is older than these wheels require. Preferred fix: install the latest *Microsoft Visual C++ Redistributable (x64)*, then restart the shell. Without admin rights, `requirements.txt` installs `msvc-runtime` and `setup_windows_runtime.py` copies its 14.51 DLLs into the directories each native extension searches (`torch/lib`, `chromadb_rust_bindings/`). `rag.py` additionally preloads them via `win_runtime.py` as a safety net.
-- **First request/startup is slow**: importing `transformers`/`sentence-transformers` takes ~1–4 minutes on older CPUs; the lifespan hook warms the model before serving.
-- **`indexed_chunks` is 0 or low**: run `python ingest.py` and confirm your PDFs contain selectable text (not scans).
-- **`MIN_RELEVANCE_DISTANCE`** is a provisional Chroma cosine-distance threshold; tune it on labelled questions.
-
-## Security notes
-
-- `python app.py` binds `0.0.0.0:8000` with no authentication. Keep it on localhost (`--host 127.0.0.1`) or put it behind a reverse proxy that enforces the provider's webhook signature before exposing it.
-- Logs record the transcription event and the model name only; do not add caller numbers or other personal data.
-
-## Notes
-
-- The E5 multilingual model is a starting point, not proof of Hausa quality. Test retrieval with real Hausa/Pidgin questions and trusted answers.
-- DeepSeek latency is not guaranteed to fit a 4-second webhook budget; measure end-to-end latency and use a provider-supported async/queued flow if the provider times out.
-- For auditability, consider logging question, retrieved source IDs, model/version and latency (avoid storing phone numbers).
+Troubleshooting: see the previous notes on the Windows VC++ runtime (`WinError 1114`), first-run
+model download and scanned PDFs.

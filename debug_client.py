@@ -69,18 +69,21 @@ def ask(
 def print_result(result: dict[str, Any]) -> None:
     timings = result.get("timings", {})
     print(f"\nstage: {result.get('stage')} | total: {result.get('total_ms')} ms "
-          f"(retrieval {timings.get('retrieval_ms')} ms, llm {timings.get('llm_ms')} ms)")
+          f"| revisions: {result.get('revisions', 0)}")
+    verification = result.get("verification") or {}
+    if verification:
+        print(f"verification: {verification.get('status')} - {verification.get('reasoning_summary', '')[:160]}")
     print(f"history: {result.get('history_used', 0)} prior message(s) sent to the model")
     index = result.get("index", {})
-    print(f"index: {index.get('collection')} -> {index.get('chunks')} chunks")
+    print(f"index: KB1={index.get('kb1_chunks')} chunks | KB2={index.get('kb2_chunks')} chunks")
 
     hits = result.get("hits", [])
     used = sum(1 for hit in hits if hit.get("used"))
     print(f"retrieved: {len(hits)} chunk(s), {used} above the relevance threshold")
     for position, hit in enumerate(hits, start=1):
         marker = "*" if hit.get("used") else "-"
-        print(f"  {marker} [{position}] {hit.get('source')} chunk {hit.get('chunk')} "
-              f"distance={hit.get('distance')}")
+        label = hit.get("citation") or hit.get("document_name") or "unknown"
+        print(f"  {marker} [{position}] {label} distance={hit.get('distance')}")
         preview = " ".join(str(hit.get("preview", "")).split())
         if preview:
             print(f"        {preview[:160]}")
