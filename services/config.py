@@ -92,6 +92,11 @@ class Settings:
 
     debug_api_token: str = field(default_factory=lambda: _env("DEBUG_API_TOKEN", ""))
     gap_api_token: str = field(default_factory=lambda: _env("GAP_API_TOKEN", ""))
+    # Vapi telephony integration.
+    vapi_public_base_url: str = field(default_factory=lambda: _env("VAPI_PUBLIC_BASE_URL", ""))
+    vapi_webhook_secret: str = field(default_factory=lambda: _env("VAPI_WEBHOOK_SECRET", ""))
+    vapi_custom_llm_secret: str = field(default_factory=lambda: _env("VAPI_CUSTOM_LLM_SECRET", ""))
+
     frontend_origins: list[str] = field(
         default_factory=lambda: [
             item.strip()

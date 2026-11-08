@@ -94,6 +94,9 @@ Copy `.env.example` to `.env` and set `DEEPSEEK_API_KEY`. Nothing is hardcoded i
 | `DEBUG_API_TOKEN` | empty | required for remote `/debug/ask` |
 | `GAP_API_TOKEN` | empty | if set, `X-Policy-Token` (or legacy `X-Gap-Token`) required |
 | `HISTORY_MAX_MESSAGES` / `HISTORY_TTL_SECONDS` | `8` / `1800` | in-process voice memory |
+| `VAPI_PUBLIC_BASE_URL` | empty | public HTTPS base Vapi uses for the assistant and custom LLM |
+| `VAPI_WEBHOOK_SECRET` | empty | optional `X-Vapi-Secret` check on server events |
+| `VAPI_CUSTOM_LLM_SECRET` | empty | optional Bearer check on `/vapi/chat/completions` |
 | `TRANSCRIPT_CORRECTION_ENABLED` | `true` | normalise noisy ASR before routing |
 | `TRANSCRIPT_CORRECTION_TIMEOUT` | `3.0` | cap for the optional correction LLM call |
 | `NOISY_TRANSCRIPT_HINT` | `true` | warn the AgroBridge answer prompt about ASR errors |
@@ -210,6 +213,53 @@ evidence-backed gaps are omitted by the UI rather than padded.
 ```json
 {"status":"ok","model":"deepseek-flash","indexed_chunks":546,"kb1_chunks":546,"kb2_chunks":254,
  "verifier_enabled":true,"max_revisions":2,"qa_budget_seconds":4.3}
+```
+
+## Vapi telephony
+
+Vapi is configured at the phone number's **Server URL**, not with a static assistant. When an
+inbound call arrives with no `assistantId`, Vapi sends `assistant-request` to that URL. AgroBridge
+returns a transient assistant whose model is `custom-llm` at:
+
+```text
+{VAPI_PUBLIC_BASE_URL}/vapi
+```
+
+Vapi appends `/chat/completions`, so each caller turn reaches
+`POST /vapi/chat/completions` (also accepted at `/vapi` if the URL is configured as a full endpoint) in OpenAI format. The endpoint maps the latest user transcript plus
+prior user/assistant messages to the existing AgroBridge QA graph and returns either a normal
+`chat.completion` JSON body or an SSE stream (`stream=true`, ending with `data: [DONE]`).
+
+Server events are accepted at both the root `/` and `/vapi/webhook`, so the existing Voicebip
+webhook and Vapi can share one public URL. Informational events are acknowledged; `assistant-request`
+returns the assistant configuration immediately (well inside Vapi's 7.5 s limit).
+
+Configuration:
+
+```env
+VAPI_PUBLIC_BASE_URL=https://your-public-host.example
+# Optional; if set, configure the same values in Vapi.
+VAPI_WEBHOOK_SECRET=
+VAPI_CUSTOM_LLM_SECRET=
+```
+
+- The public base must be the HTTPS host Vapi can reach (ngrok or a deployment URL). Update it if
+  the tunnel changes.
+- The assistant config is generated dynamically, so no custom LLM URL needs to be pasted into the
+  Vapi dashboard.
+- If the assistant-request payload contains a call id, it is recorded as `conversation_id` in the
+  QA audit; otherwise Vapi's message history supplies conversation context.
+- Vapi is only the telephony/STT/TTS layer; KB1, KB2, the verifier, audit and conversation logic
+  remain in this service.
+
+Quick checks:
+
+```bash
+curl -X POST http://localhost:8000/vapi/webhook -H "Content-Type: application/json" \
+  -d '{"message":{"type":"assistant-request","call":{"id":"demo"}}}'
+
+curl -X POST http://localhost:8000/vapi/chat/completions -H "Content-Type: application/json" \
+  -d '{"model":"agrobridge","stream":false,"messages":[{"role":"user","content":"hello"}]}'
 ```
 
 ## Tests

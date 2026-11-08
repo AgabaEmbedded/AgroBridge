@@ -1,22 +1,22 @@
 export const GAP_SECTIONS = [
   {
     key: "policy_coverage_gaps",
-    title: "Needs not covered by policy",
+    title: "Policy coverage gaps",
     description: "Things farmers need that current policy commitments do not address.",
   },
   {
     key: "implementation_gaps",
-    title: "Promises not delivered",
+    title: "Implementation gaps",
     description: "Policy commitments where the available evidence shows incomplete delivery.",
   },
   {
     key: "institutional_gaps",
-    title: "Unclear responsibilities",
+    title: "Institutional gaps",
     description: "Places where it is unclear who is responsible or how institutions coordinate.",
   },
   {
     key: "evidence_gaps",
-    title: "What we could not verify",
+    title: "Evidence gaps",
     description: "Areas where the supplied documents do not show whether implementation happened.",
   },
 ];

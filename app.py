@@ -21,6 +21,7 @@ from services.audit_service import new_audit_id
 from services.config import settings
 from services.embedding_service import dimension, warmup
 from services.retrieval_service import collection_count
+from services.vapi_service import router as vapi_router, vapi_chat_completions, vapi_webhook
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
@@ -196,6 +197,9 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="AgroBridge", version="0.2.0", lifespan=lifespan)
+app.include_router(vapi_router)
+# Accept the custom-LLM URL with or without the appended /chat/completions path.
+app.add_api_route("/vapi", vapi_chat_completions, methods=["POST"], include_in_schema=False)
 
 app.add_middleware(
     CORSMiddleware,
@@ -371,6 +375,10 @@ async def policy_analyzer(request: Request) -> JSONResponse:
 @app.post("/")
 async def handle_voicebip_webhook(request: Request):
     data = await read_payload(request)
+    # Vapi posts {"message": {"type": ...}} to the Server URL. Delegate those events while
+    # keeping the existing Voicebip webhook contract on the same root path.
+    if isinstance(data.get("message"), dict) and data["message"].get("type"):
+        return await vapi_webhook(request)
     event_type = data.get("event") or data.get("event_type")
     key = conversation_key(data)
     logger.info(

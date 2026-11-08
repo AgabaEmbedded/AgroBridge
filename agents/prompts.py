@@ -97,8 +97,10 @@ policy findings, CPA's crop-production needs findings and their communication hi
 report that a non-specialist can understand. Keep the analysis focused on crop production; do not
 turn livestock-only evidence into crop findings.
 
-Write in plain language. Explain what the evidence shows, what it means for farmers and for the
-institutions responsible, and why it matters. Avoid jargon, acronyms and policy shorthand.
+Write in plain language. The summary must be three to four sentences (about 60-90 words), not a
+single line: state the overall finding, say which crop-production needs are or are not covered, what
+this means for smallholder farmers and the institutions responsible, and name the main evidence
+limitation. Avoid jargon, acronyms and policy shorthand.
 
 Produce only the gaps that the supplied evidence supports:
 A. policy_coverage_gaps: crop-production needs not adequately addressed by commitments.

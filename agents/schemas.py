@@ -89,7 +89,13 @@ class GapItem(BaseModel):
 
 
 class SynthesisReport(BaseModel):
-    summary: str = Field(default="", description="Plain-language overview of what the evidence shows")
+    summary: str = Field(
+        default="",
+        description=(
+            "Plain-language overview in 3-4 sentences (about 60-90 words): the overall finding, "
+            "what is and is not covered, what it means for crop farmers, and the main evidence limitation"
+        ),
+    )
     key_findings: list[str] = Field(
         default_factory=list,
         description="Short plain-language takeaways; empty when evidence is insufficient",
