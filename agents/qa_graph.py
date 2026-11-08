@@ -10,12 +10,18 @@ import time
 
 from langgraph.graph import END, START, StateGraph
 
+from agents.conversation_agent import conversation_node
+from agents.correction_agent import correction_node
 from agents.qa_agents import agrobridge_node, finalize_node, revision_node, verifier_node
 from agents.runtime import remaining
 from agents.state import QAState
 from services.config import settings
 
 _compiled = None
+
+
+def route_after_conversation(state: QAState) -> str:
+    return "finalize" if state.get("direct_answer") else "agrobridge"
 
 
 def route_after_verifier(state: QAState) -> str:
@@ -34,12 +40,20 @@ def build_qa_graph():
     global _compiled
     if _compiled is None:
         graph = StateGraph(QAState)
+        graph.add_node("correction", correction_node)
+        graph.add_node("conversation", conversation_node)
         graph.add_node("agrobridge", agrobridge_node)
         graph.add_node("verifier", verifier_node)
         graph.add_node("revision", revision_node)
         graph.add_node("finalize", finalize_node)
 
-        graph.add_edge(START, "agrobridge")
+        graph.add_edge(START, "correction")
+        graph.add_edge("correction", "conversation")
+        graph.add_conditional_edges(
+            "conversation",
+            route_after_conversation,
+            {"agrobridge": "agrobridge", "finalize": "finalize"},
+        )
         graph.add_edge("agrobridge", "verifier")
         graph.add_conditional_edges(
             "verifier",

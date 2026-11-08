@@ -11,6 +11,7 @@ __pycache__/
 
 # Vector index and knowledge-base corpora (large / review-gated)
 chroma_db/
+chroma_db.*/
 documents/
 candidate_documents/
 Download docs/

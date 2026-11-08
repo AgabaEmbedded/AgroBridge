@@ -111,3 +111,12 @@ class VerificationVerdict(BaseModel):
     citations: list[str] = Field(default_factory=list)
     revision_instructions: list[str] = Field(default_factory=list)
     reasoning_summary: str = ""
+
+
+class CorrectedTranscript(BaseModel):
+    """Structured output for the ASR transcript normaliser."""
+
+    corrected_text: str = Field(description="Cleaned farmer question; unchanged if already clear")
+    crop: str | None = None
+    confidence: Confidence = "low"
+    notes: str = ""

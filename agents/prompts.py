@@ -100,3 +100,11 @@ labels inside text fields.
 Distinguish confirmed shortfall from potential gap and insufficient evidence. Do not conclude that
 government failed merely because a report was not retrieved. Use only citation labels present in the
 supplied material; never fabricate citations, figures or institutions."""
+
+
+NOISY_TRANSCRIPT_HINT = """The incoming text is an automatic speech-recognition transcript
+from a telephone call. It may contain mis-heard words, missing words, filler, repetition,
+stutters or non-native English. Infer likely agricultural vocabulary and the caller's intent
+carefully, but never invent a crop, symptom, product or rate. If a key detail is unclear, ask a
+short clarification instead of guessing. Do not switch crops and do not answer a different
+question than the one intended."""

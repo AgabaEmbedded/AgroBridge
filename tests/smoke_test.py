@@ -53,7 +53,7 @@ def test_retrieval() -> None:
     check(bool(kb1), f"KB1 has chunks ({kb1})")
     check(bool(kb2), f"KB2 has chunks ({kb2})")
 
-    hits1 = search_kb1("foot and mouth disease cattle", top_k=3)
+    hits1 = search_kb1("cassava mosaic disease", top_k=3)
     check(bool(hits1), "KB1 search returns hits")
     required = {"text", "citation", "document_id", "knowledge_base", "distance"}
     check(required.issubset(hits1[0]), "KB1 hits carry citation/document metadata")
@@ -71,7 +71,7 @@ def test_retrieval() -> None:
 async def test_qa() -> None:
     audit_id = new_audit_id()
     state = await run_question_answer(
-        "What are the signs of foot and mouth disease in cattle?",
+        "What are the signs of cassava mosaic disease?",
         history=[],
         conversation_id="smoke-qa",
         audit_id=audit_id,
@@ -143,9 +143,9 @@ async def test_gap() -> None:
 
 
 async def test_revision_path() -> None:
-    hits = search_kb1("foot and mouth disease cattle", top_k=3)
+    hits = search_kb1("cassava mosaic disease", top_k=3)
     state = {
-        "question": "How do I treat foot and mouth disease in cattle?",
+        "question": "How do I treat cassava mosaic disease?",
         "draft": QaAnswer(
             answer="Mix any antibiotic at 20 ml per litre and spray the herd.",
             recommendations=["Use 20 ml/L antibiotic"],

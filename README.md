@@ -80,8 +80,8 @@ Copy `.env.example` to `.env` and set `DEEPSEEK_API_KEY`. Nothing is hardcoded i
 |---|---|---|
 | `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` | `deepseek-flash` / `https://api.deepseek.com` | generation provider |
 | `EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | local embeddings |
-| `TOP_K` | `4` | KB hits per QA agent call |
-| `MIN_RELEVANCE_DISTANCE` | `1.25` | provisional cosine filter |
+| `TOP_K` | `6` | KB hits per QA agent call |
+| `MIN_RELEVANCE_DISTANCE` | `0.15` | cosine-distance cutoff (lower is closer; calibrated on crop questions) |
 | `VERIFIER_ENABLED` | `true` | policy verification node |
 | `MAX_REVISIONS` | `2` | maximum revision attempts |
 | `QA_BUDGET_SECONDS` | `4.3` | hard budget for the voice workflow (Voicebip allows ~5 s) |
@@ -94,6 +94,9 @@ Copy `.env.example` to `.env` and set `DEEPSEEK_API_KEY`. Nothing is hardcoded i
 | `DEBUG_API_TOKEN` | empty | required for remote `/debug/ask` |
 | `GAP_API_TOKEN` | empty | if set, `X-Gap-Token` required on `/api/gap-analysis` |
 | `HISTORY_MAX_MESSAGES` / `HISTORY_TTL_SECONDS` | `8` / `1800` | in-process voice memory |
+| `TRANSCRIPT_CORRECTION_ENABLED` | `true` | normalise noisy ASR before routing |
+| `TRANSCRIPT_CORRECTION_TIMEOUT` | `3.0` | cap for the optional correction LLM call |
+| `NOISY_TRANSCRIPT_HINT` | `true` | warn the AgroBridge answer prompt about ASR errors |
 | `AUDIT_ENABLED` | `true` | JSONL audit trail |
 
 `LLM_TIMEOUT_SECONDS` remains as an advisory ceiling; each agent call is also bounded by the
@@ -143,14 +146,33 @@ agent execution trace and a `tel:` button for the phone-based Farmer Assistant. 
 
 ### `POST /` — Voicebip webhook
 
-Unchanged contract. `turn` runs the full QA graph with the voice budget; other events are
-acknowledged as before (`call.idle_silence` asks the caller to repeat the question).
+Unchanged contract. `turn` runs the conversation router and, when needed, the QA graph with the
+voice budget; other events are acknowledged as before (`call.idle_silence` asks the caller to
+repeat the question).
 
 ```bash
 curl -X POST http://localhost:8000/ -H "Content-Type: application/json" \
-  -d '{"event":"turn","call_id":"demo-1","transcription":"What are the signs of foot and mouth disease in cattle?"}'
+  -d '{"event":"turn","call_id":"demo-1","transcription":"What are the signs of cassava mosaic disease?"}'
 # -> {"response": "...", "text": "..."}
 ```
+
+**Conversation handling.** Before retrieval, a deterministic router classifies the turn:
+
+- greetings/social openings receive a natural reply and never touch RAG;
+- livestock questions are politely declined with a veterinarian/extension referral;
+- clear out-of-scope questions are declined;
+- a crop-production question with no crop (e.g. “my leaves are yellow”) asks which crop;
+- once a crop is named, it is retained from earlier user turns, prepended to retrieval queries and
+  used to filter evidence, so the assistant does not re-ask and does not mix crops;
+- specific advice is only returned when KB1 evidence supports it and at least one citation
+  survives validation; otherwise the caller is asked for the missing information.
+
+**Noisy speech-to-text.** The router runs after a transcript-normalisation step. Phrase-scoped
+deterministic repairs cover the errors observed on live calls (for example `line`→rice,
+`mead`→maize, `capitalize`→fertilizer, `family in`→farmer in); an optional LLM corrector handles
+other noise and is skipped for greetings, direct replies and already-clean transcripts. A separate
+prompt hint tells the AgroBridge answer agent that the text may contain ASR errors and agricultural
+mis-hearings. Both mechanisms can be disabled with the environment flags above.
 
 If verification finds a policy conflict that revision cannot resolve, the caller receives a safe
 referral instead of the unapproved advice. `NEEDS_REVIEW` answers are returned with a request to

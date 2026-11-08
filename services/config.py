@@ -60,9 +60,9 @@ class Settings:
     temperature: float = field(default_factory=lambda: _env_float("LLM_TEMPERATURE", 0.2))
 
     # Retrieval.
-    top_k: int = field(default_factory=lambda: _env_int("TOP_K", 4))
+    top_k: int = field(default_factory=lambda: _env_int("TOP_K", 6))
     gap_top_k: int = field(default_factory=lambda: _env_int("GAP_TOP_K", 6))
-    min_relevance_distance: float = field(default_factory=lambda: _env_float("MIN_RELEVANCE_DISTANCE", 1.25))
+    min_relevance_distance: float = field(default_factory=lambda: _env_float("MIN_RELEVANCE_DISTANCE", 0.15))
 
     # Question-answer workflow.
     verifier_enabled: bool = field(default_factory=lambda: _env_bool("VERIFIER_ENABLED", True))
@@ -78,6 +78,17 @@ class Settings:
     # Conversation memory (voice turns).
     history_max_messages: int = field(default_factory=lambda: _env_int("HISTORY_MAX_MESSAGES", 8))
     history_ttl_seconds: float = field(default_factory=lambda: _env_float("HISTORY_TTL_SECONDS", 1800))
+
+    # Transcript robustness: an optional LLM normaliser before routing, and/or a prompt hint.
+    transcript_correction_enabled: bool = field(
+        default_factory=lambda: _env_bool("TRANSCRIPT_CORRECTION_ENABLED", True)
+    )
+    transcript_correction_timeout: float = field(
+        default_factory=lambda: _env_float("TRANSCRIPT_CORRECTION_TIMEOUT", 3.0)
+    )
+    noisy_transcript_hint: bool = field(
+        default_factory=lambda: _env_bool("NOISY_TRANSCRIPT_HINT", True)
+    )
 
     debug_api_token: str = field(default_factory=lambda: _env("DEBUG_API_TOKEN", ""))
     gap_api_token: str = field(default_factory=lambda: _env("GAP_API_TOKEN", ""))

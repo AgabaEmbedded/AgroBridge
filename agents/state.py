@@ -7,7 +7,14 @@ from typing import Any, TypedDict
 
 class QAState(TypedDict, total=False):
     question: str
+    raw_question: str
+    corrected_question: str
+    correction: dict[str, Any]
+    correction_status: str
     top_k: int | None
+    intent: str
+    crop: str | None
+    direct_answer: str | None
     history: list[dict[str, str]]
     conversation_id: str | None
     audit_id: str
