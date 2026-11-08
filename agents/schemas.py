@@ -58,8 +58,8 @@ class NeedsFindings(BaseModel):
 
 
 class AgentMessage(BaseModel):
-    sender: Literal["GA1", "GA2"]
-    recipient: Literal["GA1", "GA2"]
+    sender: Literal["PA", "CPA"]
+    recipient: Literal["PA", "CPA"]
     intent: Literal["clarify", "confirm", "challenge", "request_evidence"]
     claims: list[str] = Field(default_factory=list)
     questions: list[str] = Field(default_factory=list)
@@ -74,7 +74,11 @@ class CommunicationReply(BaseModel):
 
 
 class GapItem(BaseModel):
-    gap_description: str
+    gap_description: str = Field(description="One plain-language sentence stating the gap")
+    plain_explanation: str = Field(
+        default="",
+        description="What this means and why it matters, in simple language for non-specialists",
+    )
     policy_commitment: str = ""
     practical_need: str = ""
     implementation_evidence: str = ""
@@ -85,7 +89,11 @@ class GapItem(BaseModel):
 
 
 class SynthesisReport(BaseModel):
-    summary: str = ""
+    summary: str = Field(default="", description="Plain-language overview of what the evidence shows")
+    key_findings: list[str] = Field(
+        default_factory=list,
+        description="Short plain-language takeaways; empty when evidence is insufficient",
+    )
     policy_coverage_gaps: list[GapItem] = Field(default_factory=list)
     implementation_gaps: list[GapItem] = Field(default_factory=list)
     institutional_gaps: list[GapItem] = Field(default_factory=list)

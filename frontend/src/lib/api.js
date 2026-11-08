@@ -1,7 +1,8 @@
 const RAW_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 export const API_BASE = RAW_BASE.replace(/\/+$/, "");
 
-const GAP_TOKEN = import.meta.env.VITE_GAP_API_TOKEN || "";
+const GAP_TOKEN =
+  import.meta.env.VITE_POLICY_API_TOKEN || import.meta.env.VITE_GAP_API_TOKEN || "";
 
 export class ApiError extends Error {
   constructor(message, status = 0, detail = "") {
@@ -38,19 +39,19 @@ export async function fetchHealth({ signal } = {}) {
 }
 
 /**
- * Run the gap-analysis graph. The backend is intentionally stateless: every call is a
+ * Run the Policy Analyzer workflow. The backend is intentionally stateless: every call is a
  * complete analysis, so calling this twice with follow-ups starts two independent runs.
  */
 export async function runGapAnalysis({ query, maxRounds, signal }) {
   const headers = { "Content-Type": "application/json" };
-  if (GAP_TOKEN) headers["X-Gap-Token"] = GAP_TOKEN;
+  if (GAP_TOKEN) headers["X-Policy-Token"] = GAP_TOKEN;
 
   const payload = { query };
   if (Number.isInteger(maxRounds)) payload.max_rounds = maxRounds;
 
   let response;
   try {
-    response = await fetch(`${API_BASE}/api/gap-analysis`, {
+    response = await fetch(`${API_BASE}/api/policy-analyzer`, {
       method: "POST",
       headers,
       body: JSON.stringify(payload),

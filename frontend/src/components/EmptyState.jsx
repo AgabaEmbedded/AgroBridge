@@ -3,10 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 const EXAMPLES = [
-  "Where does Nigeria's livestock disease control policy fall short in implementation?",
-  "Compare extension service commitments with what farmers actually need.",
-  "What budget or programme evidence exists for veterinary surveillance?",
-  "Which farmer needs are missing from the current agricultural policy?",
+  "How well does Nigeria's seed policy match what smallholder maize farmers need?",
+  "Where do extension and fertilizer commitments fall short for rice farmers?",
+  "What budget or implementation evidence exists for irrigation and mechanization?",
+  "Which crop-production needs are missing from current agricultural policy?",
 ];
 
 const PHONE_DISPLAY = "+234 201 350 2062";
@@ -21,13 +21,13 @@ export function EmptyState({ onExample }) {
           Multi-agent policy intelligence
         </span>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          Where does agricultural policy meet practice?
+          Where does crop-production policy meet practice?
         </h1>
         <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-          Ask a question about Nigerian agricultural policy. A policy analyst (KB2) and
-          an agricultural needs analyst (KB1) exchange findings before a synthesis
-          reports coverage, implementation, institutional and evidence gaps — each with
-          citations.
+          Ask a question about Nigerian crop-production policy. Two specialist agents compare
+          what policy promises with what crop farmers actually need, then explain the gaps the
+          evidence supports in plain language. Empty categories are valid; nothing is
+          invented to fill a fixed number of findings.
         </p>
       </div>
 

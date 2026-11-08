@@ -6,7 +6,7 @@ trail:
 1. **Question-Answer (voice):** Voicebip posts farmer questions; the AgroBridge agent answers
    from KB1, a policy verifier checks the recommendation against KB2, and unapproved drafts are
    revised and rechecked (bounded loop).
-2. **Gap Analysis (web API):** a policy analyst (KB2) and an agricultural needs analyst (KB1)
+2. **Policy Analyzer (web API):** a Policy Analyst (KB2) and a Crop Production Analyst (KB1)
    exchange structured findings, then a synthesis node reports policy coverage, implementation,
    institutional and evidence gaps.
 
@@ -22,11 +22,11 @@ Voicebip POST /  ->  QA graph
                        ├─ revision agent    (loop, max MAX_REVISIONS)
                        └─ finalize          (voice-safe answer + audit)
 
-POST /api/gap-analysis -> Gap graph
-                       ├─ GA1 policy analyst        (KB2)
-                       ├─ GA2 agricultural needs    (KB1)
+POST /api/policy-analyzer -> Policy Analyzer graph
+                       ├─ PA policy analyst        (KB2)
+                       ├─ CPA agricultural needs    (KB1)
                        ├─ communicate               (structured messages, GAP_MAX_ROUNDS)
-                       └─ synthesis                 (4 gap categories + citations)
+                       └─ synthesis                 (4 finding categories + citations)
 ```
 
 ## Directory
@@ -46,9 +46,9 @@ agents/
   runtime.py            budgets and timings
   state.py              typed graph states
   qa_agents.py          answer / verifier / revision / finalize
-  gap_agents.py         GA1 / GA2 / communication / synthesis
+  gap_agents.py         PA / CPA / communication / synthesis
   qa_graph.py           question-answer LangGraph
-  gap_graph.py          gap-analysis LangGraph
+  gap_graph.py          Policy Analyzer LangGraph
 documents/KB1/          agricultural manuals, guides, disease references
 documents/KB2/          policy, regulation, budget and implementation documents
 ingest.py               sync both knowledge bases
@@ -88,11 +88,11 @@ Copy `.env.example` to `.env` and set `DEEPSEEK_API_KEY`. Nothing is hardcoded i
 | `QA_DEBUG_BUDGET_SECONDS` | `60` | budget for `/debug/ask` (full loop) |
 | `QA_ANSWER_MAX_TOKENS` / `VERIFIER_MAX_TOKENS` | `320` / `300` | structured output caps |
 | `GAP_MAX_ROUNDS` | `2` | agent communication rounds |
-| `GAP_TIMEOUT_SECONDS` | `240` | gap-analysis workflow budget |
+| `GAP_TIMEOUT_SECONDS` | `240` | Policy Analyzer workflow budget |
 | `GAP_MAX_OUTPUT_TOKENS` | `900` | per-agent output cap |
-| `GAP_TOP_K` | `6` | KB hits per gap agent call |
+| `GAP_TOP_K` | `6` | KB hits per policy-analyst call |
 | `DEBUG_API_TOKEN` | empty | required for remote `/debug/ask` |
-| `GAP_API_TOKEN` | empty | if set, `X-Gap-Token` required on `/api/gap-analysis` |
+| `GAP_API_TOKEN` | empty | if set, `X-Policy-Token` (or legacy `X-Gap-Token`) required |
 | `HISTORY_MAX_MESSAGES` / `HISTORY_TTL_SECONDS` | `8` / `1800` | in-process voice memory |
 | `TRANSCRIPT_CORRECTION_ENABLED` | `true` | normalise noisy ASR before routing |
 | `TRANSCRIPT_CORRECTION_TIMEOUT` | `3.0` | cap for the optional correction LLM call |
@@ -135,12 +135,12 @@ python app.py
 Logs: stdout and `logs/agrobridge.log`. Audit: `logs/audit-YYYY-MM-DD.jsonl` (one record per
 workflow request, with agent outputs, KB citations, verification/revision history and timings).
 
-## Frontend (Gap Analysis)
+## Frontend (Policy Analyzer)
 
-The React + Vite interface lives in `frontend/` and calls only `POST /api/gap-analysis` and
+The React + Vite interface lives in `frontend/` and calls only `POST /api/policy-analyzer` and
 `GET /health`. It presents the four gap categories, evidence status, citations, an expandable
 agent execution trace and a `tel:` button for the phone-based Farmer Assistant. Start it with
-`cd frontend && npm install && npm run dev`; full setup, CORS and backend-gap notes are in
+`cd frontend && npm install && npm run dev`; full setup, CORS and backend notes are in
 `build_instructions/frontend_run_instructions.md`.
 
 
@@ -191,18 +191,19 @@ Returns the draft, verifier verdict (`APPROVED` / `UNAPPROVED` / `NEEDS_REVIEW`)
 KB1/KB2 hits with citations, per-node timings, audit id and both the raw answer and the
 `voice_answer`. Local requests need no token; remote requests require `X-Debug-Token`.
 
-### `POST /api/gap-analysis`
+### `POST /api/policy-analyzer`
 
 ```bash
-curl -X POST http://localhost:8000/api/gap-analysis -H "Content-Type: application/json" \
-  -d '{"query":"Identify gaps between Nigeria agricultural extension policy and livestock disease control needs","max_rounds":1}'
+curl -X POST http://localhost:8000/api/policy-analyzer -H "Content-Type: application/json" \
+  -d '{"query":"How well does Nigeria's seed and extension policy match what smallholder maize farmers need?","max_rounds":1}'
 ```
 
 Returns `report` with `policy_coverage_gaps`, `implementation_gaps`, `institutional_gaps`,
 `evidence_gaps` (each item: description, commitment, practical need, implementation evidence,
 institution, citations, evidence_status, confidence), plus `communication`, agent findings,
 timings and `audit_id`. Each gap is labelled `confirmed_shortfall`, `potential_gap` or
-`insufficient_evidence`.
+`insufficient_evidence` and includes a plain-language `plain_explanation`; categories with no
+evidence-backed gaps are omitted by the UI rather than padded.
 
 ### `GET /health`
 
@@ -214,13 +215,13 @@ timings and `audit_id`. Each gap is labelled `confirmed_shortfall`, `potential_g
 ## Tests
 
 ```bash
-python tests/smoke_test.py            # retrieval + QA + revision path + gap analysis
+python tests/smoke_test.py            # retrieval + QA + revision path + Policy Analyzer
 python tests/smoke_test.py --graph qa
 python tests/smoke_test.py --graph gap
 ```
 
 They call the real embedding model and LLM, and assert citation containment, revision limits,
-communication between GA1/GA2 and audit records.
+communication between PA/CPA and audit records.
 
 ## Troubleshooting
 

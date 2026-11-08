@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
-from agents.gap_graph import run_gap_analysis
+from agents.gap_graph import run_policy_analysis
 from agents.qa_graph import run_question_answer
 from services.audit_service import new_audit_id
 from services.config import settings
@@ -202,7 +202,7 @@ app.add_middleware(
     allow_origins=settings.frontend_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Gap-Token", "X-Debug-Token"],
+    allow_headers=["Content-Type", "X-Policy-Token", "X-Gap-Token", "X-Debug-Token"],
 )
 
 
@@ -321,12 +321,11 @@ async def debug_ask(request: Request) -> JSONResponse:
     return JSONResponse(result)
 
 
-@app.post("/api/gap-analysis")
-async def gap_analysis(request: Request) -> JSONResponse:
-    """Run the independent gap-analysis graph (KB2 policy + KB1 needs + communication)."""
-    if settings.gap_api_token and not secrets.compare_digest(
-        request.headers.get("x-gap-token", ""), settings.gap_api_token
-    ):
+@app.post("/api/policy-analyzer")
+async def policy_analyzer(request: Request) -> JSONResponse:
+    """Run the Policy Analyzer workflow (KB2 policy + KB1 needs + communication)."""
+    token = request.headers.get("x-policy-token") or request.headers.get("x-gap-token", "")
+    if settings.gap_api_token and not secrets.compare_digest(token, settings.gap_api_token):
         raise HTTPException(status_code=403, detail="Invalid or missing X-Gap-Token.")
 
     data = await read_payload(request)
@@ -345,14 +344,14 @@ async def gap_analysis(request: Request) -> JSONResponse:
 
     audit_id = new_audit_id()
     try:
-        state = await run_gap_analysis(query, max_rounds=max_rounds, audit_id=audit_id)
+        state = await run_policy_analysis(query, max_rounds=max_rounds, audit_id=audit_id)
     except Exception:
-        logger.exception("Gap-analysis workflow failed")
-        raise HTTPException(status_code=502, detail="Gap-analysis workflow failed.") from None
+        logger.exception("Policy Analyzer workflow failed")
+        raise HTTPException(status_code=502, detail="Policy Analyzer workflow failed.") from None
 
     report = state.get("synthesis") or {}
     if not report:
-        raise HTTPException(status_code=502, detail="Gap-analysis produced no report.")
+        raise HTTPException(status_code=502, detail="Policy Analyzer produced no report.")
 
     return JSONResponse(
         {

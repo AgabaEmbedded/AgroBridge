@@ -30,7 +30,7 @@ export function Sidebar({
         </span>
         <div className="min-w-0">
           <p className="truncate text-base font-semibold leading-tight">AgroBridge</p>
-          <p className="truncate text-xs text-muted-foreground">Gap Analysis</p>
+          <p className="truncate text-xs text-muted-foreground">Policy Analyzer</p>
         </div>
       </div>
 

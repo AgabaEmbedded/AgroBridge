@@ -20,9 +20,14 @@ export function GapCard({ gap, onCitation }) {
     <Card className="animate-fade-in border-border/80">
       <CardContent className="space-y-3 p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <p className="max-w-prose text-sm font-medium leading-snug">
-            {gap.gap_description}
-          </p>
+          <div className="max-w-prose space-y-1">
+            <p className="text-sm font-medium leading-snug">{gap.gap_description}</p>
+            {gap.plain_explanation ? (
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                {gap.plain_explanation}
+              </p>
+            ) : null}
+          </div>
           <div className="flex flex-wrap gap-1.5">
             <EvidenceStatusBadge status={gap.evidence_status} />
             <ConfidenceBadge confidence={gap.confidence} />
@@ -30,10 +35,10 @@ export function GapCard({ gap, onCitation }) {
         </div>
 
         <dl className="grid gap-3 sm:grid-cols-2">
-          <Field label="Policy commitment" value={gap.policy_commitment} />
-          <Field label="Agricultural need" value={gap.practical_need} />
-          <Field label="Implementation evidence" value={gap.implementation_evidence} />
-          <Field label="Responsible institution" value={gap.responsible_institution} />
+          <Field label="What policy promised" value={gap.policy_commitment} />
+          <Field label="What farmers need" value={gap.practical_need} />
+          <Field label="What was delivered" value={gap.implementation_evidence} />
+          <Field label="Who is responsible" value={gap.responsible_institution} />
         </dl>
 
         {gap.citations?.length ? (

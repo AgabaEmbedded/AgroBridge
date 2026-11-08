@@ -232,9 +232,9 @@ export default function App() {
             <Menu className="h-5 w-5" />
           </Button>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold">Gap Analysis</p>
+            <p className="truncate text-sm font-semibold">Policy Analyzer</p>
             <p className="hidden truncate text-xs text-muted-foreground sm:block">
-              Policy commitments vs. agricultural practice
+              Policy commitments vs. crop-production needs
             </p>
           </div>
           {health?.status !== "ok" ? (

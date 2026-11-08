@@ -1,6 +1,6 @@
-"""Gap-analysis orchestration graph.
+"""Policy Analyzer orchestration graph for crop-production policy.
 
-Input -> GA1 (KB2) -> GA2 (KB1) -> structured communication rounds -> synthesis -> output.
+Input -> PA (KB2) -> CPA (KB1) -> structured communication rounds -> synthesis -> output.
 Independent from the question-answer graph; shares only services.
 """
 
@@ -12,7 +12,7 @@ from langgraph.graph import END, START, StateGraph
 
 from agents.gap_agents import (
     communication_node,
-    needs_analyst_node,
+    crop_production_analyst_node,
     policy_analyst_node,
     synthesis_node,
 )
@@ -23,13 +23,15 @@ _compiled = None
 
 
 def route_after_needs(state: GapState) -> str:
-    max_rounds = int(state.get("max_rounds") or settings.gap_max_rounds)
+    value = state.get("max_rounds")
+    max_rounds = settings.gap_max_rounds if value is None else int(value)
     return "communicate" if max_rounds > 0 else "synthesize"
 
 
 def route_after_communication(state: GapState) -> str:
     rounds = int(state.get("rounds") or 0)
-    max_rounds = int(state.get("max_rounds") or settings.gap_max_rounds)
+    value = state.get("max_rounds")
+    max_rounds = settings.gap_max_rounds if value is None else int(value)
     return "communicate" if rounds < max_rounds else "synthesize"
 
 
@@ -37,15 +39,15 @@ def build_gap_graph():
     global _compiled
     if _compiled is None:
         graph = StateGraph(GapState)
-        graph.add_node("ga1", policy_analyst_node)
-        graph.add_node("ga2", needs_analyst_node)
+        graph.add_node("pa", policy_analyst_node)
+        graph.add_node("cpa", crop_production_analyst_node)
         graph.add_node("communicate", communication_node)
         graph.add_node("synthesis", synthesis_node)
 
-        graph.add_edge(START, "ga1")
-        graph.add_edge("ga1", "ga2")
+        graph.add_edge(START, "pa")
+        graph.add_edge("pa", "cpa")
         graph.add_conditional_edges(
-            "ga2",
+            "cpa",
             route_after_needs,
             {"communicate": "communicate", "synthesize": "synthesis"},
         )
@@ -59,7 +61,7 @@ def build_gap_graph():
     return _compiled
 
 
-async def run_gap_analysis(
+async def run_policy_analysis(
     query: str,
     max_rounds: int | None = None,
     audit_id: str | None = None,

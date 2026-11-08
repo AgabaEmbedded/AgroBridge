@@ -58,8 +58,8 @@ function FindingsBlock({ findings, onCitation }) {
         <ListBlock label="Implementation targets" items={findings.implementation_targets} />
         <ListBlock label="Implementation evidence" items={findings.implementation_evidence} />
         <ListBlock label="Identified policy gaps" items={findings.identified_policy_gaps} />
-        <ListBlock label="Agricultural challenges" items={findings.agricultural_challenges} />
-        <ListBlock label="Practical farmer needs" items={findings.practical_farmer_needs} />
+        <ListBlock label="Crop-production challenges" items={findings.agricultural_challenges} />
+        <ListBlock label="Practical crop-production needs" items={findings.practical_farmer_needs} />
         <ListBlock label="Technical requirements" items={findings.technical_requirements} />
         <ListBlock label="Evidence of challenges" items={findings.evidence_of_challenges} />
         <ListBlock
@@ -131,11 +131,11 @@ export function ExecutionTrace({ result, onCitation }) {
       </div>
 
       <Accordion type="multiple" className="rounded-lg border bg-card px-4">
-        <AccordionItem value="ga1">
+        <AccordionItem value="pa">
           <AccordionTrigger>
             <span className="flex items-center gap-2">
               <Search className="h-4 w-4 text-primary" aria-hidden="true" />
-              GA1 · Policy &amp; institutional analyst (KB2)
+              PA · Policy Analyst (KB2)
             </span>
           </AccordionTrigger>
           <AccordionContent>
@@ -143,11 +143,11 @@ export function ExecutionTrace({ result, onCitation }) {
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="ga2">
+        <AccordionItem value="cpa">
           <AccordionTrigger>
             <span className="flex items-center gap-2">
               <ClipboardList className="h-4 w-4 text-primary" aria-hidden="true" />
-              GA2 · Agricultural needs analyst (KB1)
+              CPA · Crop Production Analyst (KB1)
             </span>
           </AccordionTrigger>
           <AccordionContent>

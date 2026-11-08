@@ -44,7 +44,7 @@ export function GapReport({ result, onOpenSources, onCitation }) {
       <Card className="overflow-hidden">
         <CardContent className="space-y-3 p-5">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">Gap analysis</Badge>
+            <Badge variant="secondary">Policy analysis</Badge>
             {result?.rounds != null ? (
               <Badge variant="outline">
                 {result.rounds} discussion {result.rounds === 1 ? "round" : "rounds"}
@@ -59,6 +59,18 @@ export function GapReport({ result, onOpenSources, onCitation }) {
           <p className="whitespace-pre-line text-sm leading-relaxed text-foreground/90">
             {report.summary || "The backend returned no summary for this analysis."}
           </p>
+          {report.key_findings?.length ? (
+            <div className="rounded-md bg-muted/50 p-3">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Key findings
+              </p>
+              <ul className="list-disc space-y-1 pl-4 text-sm">
+                {report.key_findings.map((finding, index) => (
+                  <li key={index}>{finding}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="outline" size="sm" onClick={onOpenSources}>
@@ -91,10 +103,12 @@ export function GapReport({ result, onOpenSources, onCitation }) {
 
       <Accordion
         type="multiple"
-        defaultValue={GAP_SECTIONS.map((section) => section.key)}
+        defaultValue={GAP_SECTIONS.filter((section) => (report[section.key] || []).length).map(
+          (section) => section.key,
+        )}
         className="space-y-3"
       >
-        {GAP_SECTIONS.map((section) => {
+        {GAP_SECTIONS.filter((section) => (report[section.key] || []).length).map((section) => {
           const gaps = report[section.key] || [];
           const Icon = SECTION_ICONS[section.key];
           return (
@@ -122,16 +136,21 @@ export function GapReport({ result, onOpenSources, onCitation }) {
                       />
                     ))}
                   </div>
-                ) : (
-                  <p className="rounded-md bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
-                    No gaps reported in this category for the supplied documents.
-                  </p>
-                )}
+                ) : null}
               </AccordionContent>
             </AccordionItem>
           );
         })}
       </Accordion>
+
+      {totalGaps === 0 ? (
+        <Card>
+          <CardContent className="p-5 text-sm text-muted-foreground">
+            No evidence-backed gaps were found in the supplied documents. That is a valid result;
+            the documents may not contain enough implementation detail to support a finding.
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

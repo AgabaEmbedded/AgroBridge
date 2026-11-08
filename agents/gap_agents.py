@@ -1,4 +1,4 @@
-"""Gap-analysis agents: policy analyst (KB2), needs analyst (KB1), communication, synthesis."""
+"""Policy Analyzer agents: Policy Analyst (KB2), Crop Production Analyst (KB1), communication, synthesis."""
 
 from __future__ import annotations
 
@@ -18,7 +18,6 @@ from agents.runtime import call_timeout, expired, timings_with
 from agents.schemas import (
     AgentMessage,
     CommunicationReply,
-    GapItem,
     NeedsFindings,
     PolicyFindings,
     SynthesisReport,
@@ -61,8 +60,9 @@ async def policy_analyst_node(state: dict) -> dict:
     started = time.monotonic()
     query = (
         state["query"]
-        + " government policy commitments implementation targets budgets institutions "
-        "implementation report evaluation"
+        + " crop production seed fertilizer extension advisory irrigation mechanization "
+        "credit market climate government policy commitments implementation targets budgets "
+        "institutions implementation report evaluation"
     )
     try:
         hits = await asyncio.to_thread(search_kb2, query, None, settings.gap_top_k)
@@ -71,14 +71,14 @@ async def policy_analyst_node(state: dict) -> dict:
             "policy": PolicyFindings().model_dump(),
             "policy_hits": [],
             "error": "kb2_retrieval_error",
-            "timings": timings_with(state, ga1_ms=(time.monotonic() - started) * 1000),
+            "timings": timings_with(state, pa_ms=(time.monotonic() - started) * 1000),
         }
 
     if not hits or expired(state, minimum=3.0):
         return {
             "policy": PolicyFindings().model_dump(),
             "policy_hits": hits,
-            "timings": timings_with(state, ga1_ms=(time.monotonic() - started) * 1000),
+            "timings": timings_with(state, pa_ms=(time.monotonic() - started) * 1000),
         }
 
     user = (
@@ -88,7 +88,7 @@ async def policy_analyst_node(state: dict) -> dict:
     )
     try:
         findings = await chat_json(
-            prompts.GA1_SYSTEM,
+            prompts.PA_SYSTEM,
             user,
             PolicyFindings,
             max_tokens=settings.gap_max_output_tokens,
@@ -98,24 +98,25 @@ async def policy_analyst_node(state: dict) -> dict:
         return {
             "policy": PolicyFindings().model_dump(),
             "policy_hits": hits,
-            "error": "ga1_llm_error",
-            "timings": timings_with(state, ga1_ms=(time.monotonic() - started) * 1000),
+            "error": "pa_llm_error",
+            "timings": timings_with(state, pa_ms=(time.monotonic() - started) * 1000),
         }
 
     findings.citations, _ = sanitize_citations(findings.citations, hits)
     return {
         "policy": findings.model_dump(),
         "policy_hits": hits,
-        "timings": timings_with(state, ga1_ms=(time.monotonic() - started) * 1000),
+        "timings": timings_with(state, pa_ms=(time.monotonic() - started) * 1000),
     }
 
 
-async def needs_analyst_node(state: dict) -> dict:
+async def crop_production_analyst_node(state: dict) -> dict:
     started = time.monotonic()
     try:
         hits = await asyncio.to_thread(
             search_kb1,
-            f"{state['query']} farmer challenges technical requirements extension services",
+            f"{state['query']} crop production farmer challenges technical requirements "
+            "seed soil water pests extension services",
             None,
             settings.gap_top_k,
         )
@@ -124,7 +125,7 @@ async def needs_analyst_node(state: dict) -> dict:
             "needs": NeedsFindings().model_dump(),
             "needs_hits": [],
             "error": "kb1_retrieval_error",
-            "timings": timings_with(state, ga2_ms=(time.monotonic() - started) * 1000),
+            "timings": timings_with(state, cpa_ms=(time.monotonic() - started) * 1000),
         }
 
     policy = state.get("policy") or {}
@@ -132,18 +133,18 @@ async def needs_analyst_node(state: dict) -> dict:
         return {
             "needs": NeedsFindings().model_dump(),
             "needs_hits": hits,
-            "timings": timings_with(state, ga2_ms=(time.monotonic() - started) * 1000),
+            "timings": timings_with(state, cpa_ms=(time.monotonic() - started) * 1000),
         }
 
     user = (
         f"Analysis question: {state['query']}\n\n"
-        f"GA1 policy findings:\n{json.dumps(policy, ensure_ascii=False)}\n\n"
+        f"PA policy findings:\n{json.dumps(policy, ensure_ascii=False)}\n\n"
         f"KB1 agricultural evidence:\n{format_evidence(hits)}\n\n"
         "Identify practical challenges, farmer needs, technical requirements and coverage observations."
     )
     try:
         findings = await chat_json(
-            prompts.GA2_SYSTEM,
+            prompts.CPA_SYSTEM,
             user,
             NeedsFindings,
             max_tokens=settings.gap_max_output_tokens,
@@ -153,23 +154,23 @@ async def needs_analyst_node(state: dict) -> dict:
         return {
             "needs": NeedsFindings().model_dump(),
             "needs_hits": hits,
-            "error": "ga2_llm_error",
-            "timings": timings_with(state, ga2_ms=(time.monotonic() - started) * 1000),
+            "error": "cpa_llm_error",
+            "timings": timings_with(state, cpa_ms=(time.monotonic() - started) * 1000),
         }
 
     findings.citations, _ = sanitize_citations(findings.citations, hits)
     return {
         "needs": findings.model_dump(),
         "needs_hits": hits,
-        "timings": timings_with(state, ga2_ms=(time.monotonic() - started) * 1000),
+        "timings": timings_with(state, cpa_ms=(time.monotonic() - started) * 1000),
     }
 
 
 def _communication_context(state: dict, messages: list[dict[str, Any]]) -> str:
     return (
         f"Analysis question: {state['query']}\n\n"
-        f"GA1 findings:\n{json.dumps(state.get('policy') or {}, ensure_ascii=False)}\n\n"
-        f"GA2 findings:\n{json.dumps(state.get('needs') or {}, ensure_ascii=False)}\n\n"
+        f"PA findings:\n{json.dumps(state.get('policy') or {}, ensure_ascii=False)}\n\n"
+        f"CPA findings:\n{json.dumps(state.get('needs') or {}, ensure_ascii=False)}\n\n"
         f"Conversation so far:\n{json.dumps(messages[-8:], ensure_ascii=False)}"
     )
 
@@ -178,7 +179,8 @@ async def communication_node(state: dict) -> dict:
     """One structured exchange per round, alternating direction."""
     started = time.monotonic()
     rounds = int(state.get("rounds") or 0)
-    max_rounds = int(state.get("max_rounds") or settings.gap_max_rounds)
+    value = state.get("max_rounds")
+    max_rounds = settings.gap_max_rounds if value is None else int(value)
     messages = list(state.get("messages") or [])
     policy_hits = list(state.get("policy_hits") or [])
     needs_hits = list(state.get("needs_hits") or [])
@@ -187,14 +189,14 @@ async def communication_node(state: dict) -> dict:
         return {"rounds": max_rounds}
 
     context = _communication_context(state, messages)
-    ga2_to_ga1 = rounds % 2 == 0
+    cpa_to_pa = rounds % 2 == 0
 
     try:
-        if ga2_to_ga1:
+        if cpa_to_pa:
             ask = await chat_json(
-                prompts.GA2_COMMUNICATION_SYSTEM,
+                prompts.CPA_COMMUNICATION_SYSTEM,
                 context
-                + "\n\nAsk GA1 whether the identified needs are covered by commitments, "
+                + "\n\nAsk PA whether the identified needs are covered by commitments, "
                 "implementation evidence or budgets.",
                 CommunicationReply,
                 max_tokens=settings.gap_max_output_tokens,
@@ -202,7 +204,7 @@ async def communication_node(state: dict) -> dict:
             )
             asked = _sanitize_messages(ask.messages, policy_hits + needs_hits)
             for message in asked:
-                message.sender, message.recipient = "GA2", "GA1"
+                message.sender, message.recipient = "CPA", "PA"
 
             query = " ".join(
                 message.questions[0] if message.questions else message.notes
@@ -213,11 +215,11 @@ async def communication_node(state: dict) -> dict:
 
             reply_context = (
                 context
-                + f"\n\nGA2's questions:\n{json.dumps([m.model_dump() for m in asked], ensure_ascii=False)}"
+                + f"\n\nCPA's questions:\n{json.dumps([m.model_dump() for m in asked], ensure_ascii=False)}"
                 + f"\n\nKB2 evidence:\n{format_evidence(extra)}"
             )
             reply = await chat_json(
-                prompts.GA1_COMMUNICATION_SYSTEM,
+                prompts.PA_COMMUNICATION_SYSTEM,
                 reply_context,
                 CommunicationReply,
                 max_tokens=settings.gap_max_output_tokens,
@@ -225,19 +227,19 @@ async def communication_node(state: dict) -> dict:
             )
             answered = _sanitize_messages(reply.messages, policy_hits)
             for message in answered:
-                message.sender, message.recipient = "GA1", "GA2"
+                message.sender, message.recipient = "PA", "CPA"
         else:
             ask = await chat_json(
-                prompts.GA1_COMMUNICATION_TO_GA2_SYSTEM,
+                prompts.PA_COMMUNICATION_TO_CPA_SYSTEM,
                 context
-                + "\n\nAsk GA2 whether policy assumptions match technical and farmer realities.",
+                + "\n\nAsk CPA whether policy assumptions match technical and farmer realities.",
                 CommunicationReply,
                 max_tokens=settings.gap_max_output_tokens,
                 timeout=call_timeout(state, 0.6),
             )
             asked = _sanitize_messages(ask.messages, policy_hits + needs_hits)
             for message in asked:
-                message.sender, message.recipient = "GA1", "GA2"
+                message.sender, message.recipient = "PA", "CPA"
 
             query = " ".join(
                 message.questions[0] if message.questions else message.notes
@@ -248,11 +250,11 @@ async def communication_node(state: dict) -> dict:
 
             reply_context = (
                 context
-                + f"\n\nGA1's questions:\n{json.dumps([m.model_dump() for m in asked], ensure_ascii=False)}"
+                + f"\n\nPA's questions:\n{json.dumps([m.model_dump() for m in asked], ensure_ascii=False)}"
                 + f"\n\nKB1 evidence:\n{format_evidence(extra)}"
             )
             reply = await chat_json(
-                prompts.GA2_COMMUNICATION_TO_GA1_SYSTEM,
+                prompts.CPA_COMMUNICATION_TO_PA_SYSTEM,
                 reply_context,
                 CommunicationReply,
                 max_tokens=settings.gap_max_output_tokens,
@@ -260,7 +262,7 @@ async def communication_node(state: dict) -> dict:
             )
             answered = _sanitize_messages(reply.messages, needs_hits)
             for message in answered:
-                message.sender, message.recipient = "GA2", "GA1"
+                message.sender, message.recipient = "CPA", "PA"
     except LLMServiceError:
         return {
             "rounds": max_rounds,
@@ -292,26 +294,24 @@ async def synthesis_node(state: dict) -> dict:
     if not all_hits:
         report = SynthesisReport(
             summary=(
-                "No policy or agricultural evidence was retrieved, so no gap can be established."
+                "No relevant policy or agricultural documents were retrieved, so no gap can be "
+                "established from this query."
             ),
-            evidence_gaps=[
-                GapItem(
-                    gap_description="No relevant documents were retrieved from KB1 or KB2.",
-                    evidence_status="insufficient_evidence",
-                    confidence="low",
-                )
+            key_findings=[],
+            limitations=[
+                "This is a retrieval gap, not a policy finding. Add relevant documents to KB1/KB2 "
+                "and re-run before drawing conclusions."
             ],
-            limitations=["Ingest documents into documents/KB1 and documents/KB2, then re-run."],
         )
     else:
         user = (
             f"Analysis question: {state['query']}\n\n"
-            f"GA1 findings:\n{json.dumps(state.get('policy') or {}, ensure_ascii=False)}\n\n"
-            f"GA2 findings:\n{json.dumps(state.get('needs') or {}, ensure_ascii=False)}\n\n"
+            f"PA findings:\n{json.dumps(state.get('policy') or {}, ensure_ascii=False)}\n\n"
+            f"CPA findings:\n{json.dumps(state.get('needs') or {}, ensure_ascii=False)}\n\n"
             f"Communication history:\n{json.dumps(messages, ensure_ascii=False)}\n\n"
             f"Retrieved evidence:\n{format_evidence(all_hits, max_chars=900)}\n\n"
-            "Synthesise the four gap categories, distinguishing confirmed shortfall, potential gap "
-            "and insufficient evidence."
+            "Synthesise only evidence-backed findings in plain language. Zero gaps in a category "
+            "is valid; do not fill categories or invent a gap. Every reported gap needs a citation."
         )
         try:
             report = await chat_json(
@@ -329,9 +329,26 @@ async def synthesis_node(state: dict) -> dict:
             )
 
     report, dropped = sanitize_report(report, all_hits)
+
+    # Never present an unsupported gap. Empty categories are intentional.
+    removed = 0
+    for section in (
+        report.policy_coverage_gaps,
+        report.implementation_gaps,
+        report.institutional_gaps,
+        report.evidence_gaps,
+    ):
+        kept = [gap for gap in section if gap.citations]
+        removed += len(section) - len(kept)
+        section[:] = kept
+    if removed:
+        report.limitations = list(report.limitations) + [
+            f"{removed} unsupported gap(s) were removed because they had no citation."
+        ]
+
     audit_record = {
         "query": state.get("query", ""),
-        "agents_invoked": ["ga1", "ga2", "communication", "synthesis"],
+        "agents_invoked": ["pa", "cpa", "communication", "synthesis"],
         "rounds": state.get("rounds", 0),
         "knowledge_bases": ["KB1", "KB2"],
         "retrieved_citations": [hit.get("citation") for hit in needs_hits],
@@ -344,7 +361,7 @@ async def synthesis_node(state: dict) -> dict:
         "dropped_citations": dropped,
         "error": state.get("error"),
     }
-    write_audit("gap_analysis", audit_record, state.get("audit_id"))
+    write_audit("policy_analysis", audit_record, state.get("audit_id"))
 
     return {
         "synthesis": report.model_dump(),

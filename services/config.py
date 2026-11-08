@@ -70,10 +70,10 @@ class Settings:
     qa_budget_seconds: float = field(default_factory=lambda: _env_float("QA_BUDGET_SECONDS", 4.3))
     qa_debug_budget_seconds: float = field(default_factory=lambda: _env_float("QA_DEBUG_BUDGET_SECONDS", 60.0))
 
-    # Gap-analysis workflow.
+    # Policy Analyzer workflow.
     gap_max_rounds: int = field(default_factory=lambda: _env_int("GAP_MAX_ROUNDS", 2))
     gap_timeout_seconds: float = field(default_factory=lambda: _env_float("GAP_TIMEOUT_SECONDS", 240.0))
-    gap_max_output_tokens: int = field(default_factory=lambda: _env_int("GAP_MAX_OUTPUT_TOKENS", 900))
+    gap_max_output_tokens: int = field(default_factory=lambda: _env_int("GAP_MAX_OUTPUT_TOKENS", 1200))
 
     # Conversation memory (voice turns).
     history_max_messages: int = field(default_factory=lambda: _env_int("HISTORY_MAX_MESSAGES", 8))
