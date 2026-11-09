@@ -26,6 +26,9 @@ import time
 from agents.gap_graph import run_policy_analysis
 from agents.qa_agents import UNAPPROVED_VOICE, finalize_node, revision_node
 from agents.qa_graph import route_after_verifier, run_question_answer
+from services.config import settings as _settings
+
+_settings.conversation_ai_enabled = False
 from agents.schemas import QaAnswer
 from services.audit_service import new_audit_id
 from services.config import settings

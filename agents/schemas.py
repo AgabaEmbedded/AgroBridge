@@ -134,3 +134,27 @@ class CorrectedTranscript(BaseModel):
     crop: str | None = None
     confidence: Confidence = "low"
     notes: str = ""
+
+
+ConversationIntent = Literal[
+    "greeting",
+    "social",
+    "clarification",
+    "livestock",
+    "out_of_scope",
+    "crop_only",
+    "crop_question",
+    "crop_problem",
+    "general_crop_question",
+]
+
+
+class ConversationDecision(BaseModel):
+    intent: ConversationIntent
+    crop: str | None = None
+    direct_reply: str | None = Field(
+        default=None,
+        description="Short spoken reply for greetings, clarification and out-of-scope turns; null for crop RAG turns",
+    )
+    reason: str = ""
+    confidence: Confidence = "low"

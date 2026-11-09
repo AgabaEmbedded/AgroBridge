@@ -89,6 +89,15 @@ class Settings:
     noisy_transcript_hint: bool = field(
         default_factory=lambda: _env_bool("NOISY_TRANSCRIPT_HINT", True)
     )
+    conversation_ai_enabled: bool = field(
+        default_factory=lambda: _env_bool("CONVERSATION_AI_ENABLED", True)
+    )
+    conversation_ai_timeout: float = field(
+        default_factory=lambda: _env_float("CONVERSATION_AI_TIMEOUT", 2.0)
+    )
+    vapi_qa_budget_seconds: float = field(
+        default_factory=lambda: _env_float("VAPI_QA_BUDGET_SECONDS", 8.0)
+    )
 
     debug_api_token: str = field(default_factory=lambda: _env("DEBUG_API_TOKEN", ""))
     gap_api_token: str = field(default_factory=lambda: _env("GAP_API_TOKEN", ""))

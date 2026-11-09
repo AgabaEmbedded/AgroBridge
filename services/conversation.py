@@ -123,10 +123,7 @@ PROBLEM_TERMS = (
     "insect", "insects", "weed", "weeds", "armyworm", "damage", "sick",
 )
 
-#GREETING_REPLY = (
-#    "Hello! I am AgroBridge, your crop-production assistant. I can help with maize, rice, "
-#    "cassava, tomato, pepper and other crops. Which crop are you growing?"
-#)
+
 GREETING_REPLY = (
     "Hello! I am AgroBridge, your crop-production assistant. I can help with querries concerning your farm, "
     "what will you need my assistance with today?"

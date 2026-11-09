@@ -177,7 +177,11 @@ async def agrobridge_node(state: dict) -> dict:
             QaDraft,
             max_tokens=settings.qa_answer_max_tokens,
             timeout=call_timeout(
-                state, 0.9 if state.get("correction_status") == "applied" else 0.55
+                state,
+                0.9
+                if state.get("correction_status") == "applied"
+                or state.get("intent") in {"crop_question", "crop_problem", "general_crop_question"}
+                else 0.55,
             ),
         )
     except LLMServiceError:

@@ -94,6 +94,10 @@ Copy `.env.example` to `.env` and set `DEEPSEEK_API_KEY`. Nothing is hardcoded i
 | `DEBUG_API_TOKEN` | empty | required for remote `/debug/ask` |
 | `GAP_API_TOKEN` | empty | if set, `X-Policy-Token` (or legacy `X-Gap-Token`) required |
 | `HISTORY_MAX_MESSAGES` / `HISTORY_TTL_SECONDS` | `8` / `1800` | in-process voice memory |
+| `CONVERSATION_AI_ENABLED` | `true` | AI intent/crop/direct-reply router; deterministic fallback |
+| `CONVERSATION_AI_TIMEOUT` | `2.0` | cap for the router call |
+| `VAPI_QA_BUDGET_SECONDS` | `8.0` | longer QA budget for Vapi custom-LLM requests |
+| `ELEVENLABS_VOICE_ID` | empty | ElevenLabs voice returned in the Vapi assistant config |
 | `VAPI_PUBLIC_BASE_URL` | empty | public HTTPS base Vapi uses for the assistant and custom LLM |
 | `VAPI_WEBHOOK_SECRET` | empty | optional `X-Vapi-Secret` check on server events |
 | `VAPI_CUSTOM_LLM_SECRET` | empty | optional Bearer check on `/vapi/chat/completions` |
@@ -169,6 +173,11 @@ curl -X POST http://localhost:8000/ -H "Content-Type: application/json" \
   used to filter evidence, so the assistant does not re-ask and does not mix crops;
 - specific advice is only returned when KB1 evidence supports it and at least one citation
   survives validation; otherwise the caller is asked for the missing information.
+
+An LLM router makes the intent/crop decision and writes the short reply for greetings, social
+turns, livestock redirects, out-of-scope requests and clarifications. The rule-based classifier is
+retained only as a fallback when the AI call fails or the latency budget is exhausted
+(`CONVERSATION_AI_ENABLED`, `CONVERSATION_AI_TIMEOUT`).
 
 **Noisy speech-to-text.** The router runs after a transcript-normalisation step. Phrase-scoped
 deterministic repairs cover the errors observed on live calls (for example `line`→rice,
@@ -251,6 +260,10 @@ VAPI_CUSTOM_LLM_SECRET=
   QA audit; otherwise Vapi's message history supplies conversation context.
 - Vapi is only the telephony/STT/TTS layer; KB1, KB2, the verifier, audit and conversation logic
   remain in this service.
+- The transient assistant requests the ElevenLabs voice `11labs` / `eleven_flash_v2_5` with the
+  configured `ELEVENLABS_VOICE_ID`; the ElevenLabs key stays in the Vapi integration, not this repo.
+- Vapi custom-LLM requests use `VAPI_QA_BUDGET_SECONDS` (default 8 s) instead of the 4.3 s Voicebip
+  budget, because the AI router adds a model call before retrieval/answer generation.
 
 Quick checks:
 

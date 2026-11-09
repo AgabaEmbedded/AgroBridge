@@ -2,16 +2,85 @@
 
 from __future__ import annotations
 
-from services.conversation import classify_turn
+from agents.runtime import remaining
+from services.config import settings
+from services.conversation import (
+    CLARIFY_REPLY,
+    CROP_ONLY_TEMPLATE,
+    NO_CROP_REPLY,
+    classify_turn,
+    crop_from_history,
+    detect_crop,
+)
+from services.conversation_ai import classify_with_ai
+from services.llm_service import LLMServiceError
 
 
-def conversation_node(state: dict) -> dict:
-    turn = classify_turn(state.get("question", ""), state.get("history") or [])
-    updates = {
+def _fallback_updates(question: str, history: list[dict[str, str]]) -> dict:
+    turn = classify_turn(question, history)
+    return {
         "intent": turn.intent,
         "crop": turn.crop,
         "direct_answer": turn.direct_answer,
+        "question": turn.cleaned_question or question,
     }
-    if turn.cleaned_question and turn.cleaned_question != state.get("question", ""):
-        updates["question"] = turn.cleaned_question
-    return updates
+
+
+async def conversation_node(state: dict) -> dict:
+    question = state.get("question", "")
+    history = state.get("history") or []
+
+    if not settings.conversation_ai_enabled or remaining(state) < 1.2:
+        return _fallback_updates(question, history)
+
+    timeout = min(settings.conversation_ai_timeout, max(0.8, remaining(state) * 0.45))
+    try:
+        decision = await classify_with_ai(question, history, timeout)
+    except LLMServiceError:
+        return _fallback_updates(question, history)
+    except Exception:
+        return _fallback_updates(question, history)
+
+    intent = decision.intent
+    crop = detect_crop(decision.crop or "") or detect_crop(question) or crop_from_history(history)
+    direct = (decision.direct_reply or "").strip() or None
+    fallback = classify_turn(question, history)
+
+    if intent in {"greeting", "social", "livestock", "out_of_scope", "clarification"}:
+        direct = direct or fallback.direct_answer or CLARIFY_REPLY
+        return {
+            "intent": intent,
+            "crop": crop,
+            "direct_answer": direct,
+            "question": question,
+        }
+
+    if intent == "crop_only":
+        if not crop:
+            return {
+                "intent": "clarification",
+                "crop": None,
+                "direct_answer": NO_CROP_REPLY,
+                "question": question,
+            }
+        return {
+            "intent": "crop_only",
+            "crop": crop,
+            "direct_answer": direct or CROP_ONLY_TEMPLATE.format(crop=crop),
+            "question": question,
+        }
+
+    if intent in {"crop_question", "crop_problem"} and not crop:
+        return {
+            "intent": "clarification",
+            "crop": None,
+            "direct_answer": NO_CROP_REPLY,
+            "question": question,
+        }
+
+    return {
+        "intent": intent,
+        "crop": crop,
+        "direct_answer": None,
+        "question": question,
+    }

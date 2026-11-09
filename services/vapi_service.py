@@ -135,7 +135,7 @@ async def _answer(question: str, history: list[dict[str, str]], conversation_id:
             history=history,
             conversation_id=conversation_id,
             audit_id=audit_id,
-            budget_seconds=settings.qa_budget_seconds,
+            budget_seconds=settings.vapi_qa_budget_seconds,
             top_k=settings.top_k,
         )
         final = state.get("final") or {}

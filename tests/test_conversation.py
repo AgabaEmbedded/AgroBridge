@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from agents.qa_graph import run_question_answer
+from services.config import settings
 from services.conversation import classify_turn
 from services.transcript_service import normalise_transcript
 
@@ -19,6 +20,9 @@ def check(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
     print(f"PASS {message}")
+
+
+settings.conversation_ai_enabled = False
 
 
 def test_classifier() -> None:
