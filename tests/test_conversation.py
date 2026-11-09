@@ -75,7 +75,8 @@ def test_classifier() -> None:
     check(
         continuation["intent"] == "crop_question"
         and continuation["crop"] == "maize"
-        and continuation["question"] == "I am preparing land for farming, any help?",
+        and "I am preparing land for farming, any help?" in continuation["question"]
+        and "maize" in continuation["question"],
         "crop answer continues the previous question",
     )
 

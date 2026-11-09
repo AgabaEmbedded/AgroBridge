@@ -25,7 +25,8 @@ def _fallback_updates(question: str, history: list[dict[str, str]]) -> dict:
             "intent": "crop_question",
             "crop": turn.crop,
             "direct_answer": None,
-            "question": pending,
+            "question": f"{pending}\n\nCaller clarified: {turn.cleaned_question or question}",
+            "corrected_question": f"{pending}\n\nCaller clarified: {turn.cleaned_question or question}",
         }
     return {
         "intent": turn.intent,
@@ -63,7 +64,8 @@ async def conversation_node(state: dict) -> dict:
             "intent": "crop_question",
             "crop": crop,
             "direct_answer": None,
-            "question": pending,
+            "question": f"{pending}\n\nCaller clarified: {question}",
+            "corrected_question": f"{pending}\n\nCaller clarified: {question}",
         }
 
     if intent in {"greeting", "social", "livestock", "out_of_scope", "clarification"}:
