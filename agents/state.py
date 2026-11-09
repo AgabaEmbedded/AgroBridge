@@ -22,6 +22,8 @@ class QAState(TypedDict, total=False):
     objective: str | None
     retrieval_query: str
     pending_clarification: str | None
+    previous_clarification: str | None
+    clarification_attempts: int
     history: list[dict[str, str]]
     conversation_id: str | None
     audit_id: str

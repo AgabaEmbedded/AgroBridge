@@ -164,7 +164,12 @@ async def agrobridge_node(state: dict) -> dict:
             "timings": timings_with(state, agrobridge_ms=(time.monotonic() - started) * 1000),
         }
 
-    crop_line = f"Crop: {crop}\n\n" if crop else ""
+    crop_line = (
+        f"Crop: {crop}\n\n"
+        if crop
+        else "Confirmed crop: none. Give general guidance only; do not name a specific crop as "
+        "the caller's crop. Ask which crop they are working with.\n\n"
+    )
     user = (
         f"{_history_text(state.get('history'))}"
         f"{crop_line}"
@@ -406,6 +411,8 @@ def finalize_node(state: dict) -> dict:
         "topic": state.get("topic"),
         "objective": state.get("objective"),
         "pending_clarification": state.get("pending_clarification"),
+        "previous_clarification": state.get("previous_clarification"),
+        "clarification_attempts": state.get("clarification_attempts") or 0,
     }
 
     if direct_answer:

@@ -169,6 +169,103 @@ CROP_QUESTION_RE = re.compile(
     r"\b(which|what) crop\b|\bwhat are you growing\b|\bcrop are you\b", re.IGNORECASE
 )
 
+CROP_CONFIRMATION_RE = re.compile(
+    r"\b(?:are|is)\s+(?:you|it)\s+(?:planting|growing|asking about|referring to|trying to say|saying)\b"
+    r"|\bdo you mean\b|\bdid you mean\b",
+    re.IGNORECASE,
+)
+CLARIFICATION_ATTEMPT_RE = re.compile(
+    r"\b(?:which|what) crop\b|\bdo you mean\b|\bdid you mean\b|"
+    r"\b(?:are|is)\s+(?:you|it)\s+(?:planting|growing|asking about|referring to|trying to say|saying)\b",
+    re.IGNORECASE,
+)
+YES_RE = re.compile(r"^(?:yes|yeah|yep|correct|right|that's right|sure|exactly)\b", re.IGNORECASE)
+NO_RE = re.compile(r"^(?:no|nope|not|wrong|that's not right)\b", re.IGNORECASE)
+CORRECTION_RE = re.compile(
+    r"\b(?:i said|i mean|no,? i said|you didn'?t hear|that'?s not what i said|i told you)\b",
+    re.IGNORECASE,
+)
+SHORT_CROP_SUBSTITUTIONS = {
+    "me": "maize",
+    "meat": "maize",
+    "miss": "maize",
+    "mead": "maize",
+    "rise": "rice",
+}
+SHORT_TOPIC_REWRITES = {
+    "soil": "What kind of soil does {crop} need?",
+    "fertilizer": "What fertilizer does {crop} need?",
+    "fertiliser": "What fertilizer does {crop} need?",
+    "planting": "How should I plant {crop}?",
+    "land": "How should I prepare land for {crop}?",
+    "seed": "What seed should I use for {crop}?",
+    "pest": "What pests affect {crop}?",
+    "pests": "What pests affect {crop}?",
+    "disease": "What diseases affect {crop}?",
+    "harvest": "When should I harvest {crop}?",
+    "irrigation": "How should I irrigate {crop}?",
+    "spacing": "What spacing should I use for {crop}?",
+    "weed": "How should I control weeds in {crop}?",
+    "weeding": "How should I control weeds in {crop}?",
+    "nursery": "How should I raise {crop} seedlings?",
+}
+
+
+def last_assistant_asks_crop(history: list[dict[str, str]] | None) -> bool:
+    previous = last_assistant_message(history)
+    return bool(previous and (CROP_QUESTION_RE.search(previous) or CROP_CONFIRMATION_RE.search(previous)))
+
+
+def clarification_attempts(history: list[dict[str, str]] | None) -> int:
+    """Count recent assistant clarification/confirmation turns."""
+    count = 0
+    for message in reversed(history or []):
+        if message.get("role") != "assistant":
+            continue
+        content = str(message.get("content", ""))
+        if CLARIFICATION_ATTEMPT_RE.search(content) or re.search(
+            r"\b(?:could you|can you) (?:tell|say|repeat|clarify)\b", content, re.IGNORECASE
+        ):
+            count += 1
+    return min(count, 4)
+
+
+def is_yes(text: str) -> bool:
+    return bool(YES_RE.search(str(text or "").strip()))
+
+
+def is_no(text: str) -> bool:
+    return bool(NO_RE.search(str(text or "").strip()))
+
+
+def is_correction(text: str) -> bool:
+    return bool(CORRECTION_RE.search(str(text or "")))
+
+
+def likely_crop_from_short(text: str, history: list[dict[str, str]] | None = None) -> str | None:
+    detected = detect_crop(text)
+    if detected:
+        return detected
+    normalized = " ".join(re.findall(r"[a-z]+", str(text or "").lower()))
+    for prefix in ("no ", "yes ", "i said ", "i mean ", "you didn't hear "):
+        if normalized.startswith(prefix):
+            normalized = normalized[len(prefix):]
+    for word, crop in SHORT_CROP_SUBSTITUTIONS.items():
+        if normalized == word or normalized.startswith(f"{word} "):
+            return crop_from_history(history) or crop
+    return None
+
+
+def short_topic_question(text: str, crop: str) -> str | None:
+    tokens = re.findall(r"[a-z]+", str(text or "").lower())
+    if len(tokens) > 3:
+        return None
+    for token in tokens:
+        template = SHORT_TOPIC_REWRITES.get(token)
+        if template:
+            return template.format(crop=crop)
+    return None
+
 
 def last_assistant_message(history: list[dict[str, str]] | None) -> str | None:
     for message in reversed(history or []):

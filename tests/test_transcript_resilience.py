@@ -70,6 +70,85 @@ def test_pending_request_gate() -> None:
           "a substantive request is retained for crop continuation")
 
 
+async def test_repeated_clarification() -> None:
+    settings.conversation_ai_enabled = False
+    history: list[dict[str, str]] = [
+        {"role": "assistant", "content": "Which crop are you planting?"}
+    ]
+
+    first = await conversation_agent.conversation_node(
+        _state("Me.", history)
+    )
+    check(first["direct_answer"] == "Are you trying to say maize?",
+          "unclear crop answer offers a likely crop")
+    history.extend(
+        [
+            {"role": "user", "content": "Me."},
+            {"role": "assistant", "content": first["direct_answer"]},
+        ]
+    )
+
+    second = await conversation_agent.conversation_node(
+        _state("I said meat.", history)
+    )
+    check(second["direct_answer"] == "Do you mean maize?",
+          "correction moves from likely crop to confirmation")
+    history.extend(
+        [
+            {"role": "user", "content": "I said meat."},
+            {"role": "assistant", "content": second["direct_answer"]},
+        ]
+    )
+
+    corrected_no = await conversation_agent.conversation_node(
+        _state(
+            "No, I said meat.",
+            [{"role": "assistant", "content": "Are you trying to say maize?"}],
+        )
+    )
+    check(corrected_no["direct_answer"] == "Do you mean maize?",
+          "a correction with 'No, I said' is treated as a crop correction")
+
+    third = await conversation_agent.conversation_node(
+        _state("Yes.", history)
+    )
+    check(third["crop"] == "maize" and third["intent"] == "crop_only",
+          "confirmation sets the current crop")
+    check("What would you like to know about your maize" in third["direct_answer"],
+          "confirmation moves to the next question without re-asking the crop")
+    history.extend(
+        [
+            {"role": "user", "content": "Yes."},
+            {"role": "assistant", "content": third["direct_answer"]},
+        ]
+    )
+
+    fourth = await conversation_agent.conversation_node(
+        _state("Soil.", history)
+    )
+    check(fourth["intent"] == "crop_question" and fourth["crop"] == "maize",
+          "short soil answer uses the confirmed crop")
+    check(fourth["question"] == "What kind of soil does maize need?",
+          "short soil answer becomes a maize soil question")
+
+
+async def test_confirmation_sequence() -> None:
+    settings.conversation_ai_enabled = False
+    history = [{"role": "assistant", "content": "Are you planting maize?"}]
+    confirmed = await conversation_agent.conversation_node(_state("Yes.", history))
+    check(confirmed["crop"] == "maize" and confirmed["intent"] == "crop_only",
+          "yes to a crop confirmation sets current crop")
+    history.extend(
+        [
+            {"role": "user", "content": "Yes."},
+            {"role": "assistant", "content": confirmed["direct_answer"]},
+        ]
+    )
+    soil = await conversation_agent.conversation_node(_state("Soil.", history))
+    check(soil["crop"] == "maize" and soil["question"] == "What kind of soil does maize need?",
+          "a one-word soil reply uses the confirmed maize crop")
+
+
 async def test_contextual_node() -> None:
     original = conversation_agent.classify_with_ai
     settings.conversation_ai_enabled = True
@@ -147,6 +226,8 @@ def main() -> int:
     test_spoken_sanitizer()
     test_deterministic_repairs()
     test_pending_request_gate()
+    asyncio.run(test_repeated_clarification())
+    asyncio.run(test_confirmation_sequence())
     asyncio.run(test_contextual_node())
     print("All transcript resilience tests passed")
     return 0
