@@ -54,6 +54,24 @@ def assistant_config(request: Request) -> dict[str, Any]:
             "model": "agrobridge",
             "url": f"{_public_base(request)}/vapi",
         },
+        "transcriber": {
+            "provider": "deepgram",
+            "model": "nova-2-phonecall",
+            "language": "en",
+            "smartFormat": True,
+            "keywords": [
+                "maize:4",
+                "AgroBridge:2",
+                "soil:3",
+                "seedbed:2",
+                "fertilizer:2",
+                "planting:2",
+                "cassava:2",
+                "rice:2",
+                "tomato:2",
+                "pepper:2",
+            ],
+        },
     }
     if settings.elevenlabs_voice_id:
         assistant["voice"] = {

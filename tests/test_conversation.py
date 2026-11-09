@@ -80,6 +80,18 @@ def test_classifier() -> None:
         "crop answer continues the previous question",
     )
 
+    repeat = _fallback_updates("can you repeat the question?", history)
+    check(
+        repeat["direct_answer"] == "Good land preparation... Which crop are you preparing the land for?",
+        "repeat request replays the previous assistant turn",
+    )
+
+    pending_filler = _fallback_updates("please", history)
+    check(
+        pending_filler["direct_answer"] == "Good land preparation... Which crop are you preparing the land for?",
+        "filler while a crop question is pending re-asks the crop question",
+    )
+
     generic = classify_turn("what is crop rotation?", [])
     check(generic.intent == "general_crop_question" and not generic.direct_answer, "generic crop question routes to RAG")
 

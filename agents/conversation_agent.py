@@ -11,6 +11,8 @@ from services.conversation import (
     classify_turn,
     crop_from_history,
     detect_crop,
+    is_repeat_request,
+    last_assistant_message,
     pending_crop_request,
 )
 from services.conversation_ai import classify_with_ai
@@ -20,6 +22,21 @@ from services.llm_service import LLMServiceError
 def _fallback_updates(question: str, history: list[dict[str, str]]) -> dict:
     turn = classify_turn(question, history)
     pending = pending_crop_request(history)
+    previous = last_assistant_message(history)
+    if previous and is_repeat_request(question):
+        return {
+            "intent": "clarification",
+            "crop": turn.crop,
+            "direct_answer": previous,
+            "question": question,
+        }
+    if previous and pending and turn.intent == "clarification" and not turn.crop:
+        return {
+            "intent": "clarification",
+            "crop": None,
+            "direct_answer": previous,
+            "question": question,
+        }
     if turn.intent == "crop_only" and turn.crop and pending:
         return {
             "intent": "crop_question",
@@ -56,6 +73,25 @@ async def conversation_node(state: dict) -> dict:
     direct = (decision.direct_reply or "").strip() or None
     fallback = classify_turn(question, history)
     pending = pending_crop_request(history)
+    previous = last_assistant_message(history)
+
+    # Explicit "repeat that" is a replay of the last answer, not a new clarification.
+    if previous and is_repeat_request(question):
+        return {
+            "intent": "clarification",
+            "crop": crop,
+            "direct_answer": previous,
+            "question": question,
+        }
+
+    # A filler while a crop question is pending should re-ask that question.
+    if previous and pending and fallback.intent == "clarification" and not crop:
+        return {
+            "intent": "clarification",
+            "crop": None,
+            "direct_answer": previous,
+            "question": question,
+        }
 
     # The answer agent may have asked "which crop?" on the previous turn. A short crop answer
     # continues that request; it is not a fresh crop-only turn.

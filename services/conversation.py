@@ -170,6 +170,24 @@ CROP_QUESTION_RE = re.compile(
 )
 
 
+def last_assistant_message(history: list[dict[str, str]] | None) -> str | None:
+    for message in reversed(history or []):
+        if message.get("role") == "assistant" and message.get("content"):
+            return str(message["content"])
+    return None
+
+
+REPEAT_RE = re.compile(
+    r"\b(repeat( that| the question| it| again)?|say (that| it| the question) again|"
+    r"what did you say|come again)\b",
+    re.IGNORECASE,
+)
+
+
+def is_repeat_request(text: str) -> bool:
+    return bool(REPEAT_RE.search(text))
+
+
 def pending_crop_request(history: list[dict[str, str]] | None) -> str | None:
     """Return the user request that a previous assistant crop question was following up."""
     if not history:
