@@ -48,7 +48,7 @@ def _public_base(request: Request) -> str:
 
 
 def assistant_config(request: Request) -> dict[str, Any]:
-    return {
+    assistant: dict[str, Any] = {
         "name": "AgroBridge",
         "firstMessage": FIRST_MESSAGE,
         "model": {
@@ -57,6 +57,14 @@ def assistant_config(request: Request) -> dict[str, Any]:
             "url": f"{_public_base(request)}/vapi",
         },
     }
+    if settings.elevenlabs_voice_id:
+        assistant["voice"] = {
+            "provider": "11labs",
+            "model": "eleven_flash_v2_5",
+            "voiceId": settings.elevenlabs_voice_id,
+            "optimizeStreamingLatency": 4,
+        }
+    return assistant
 
 
 def _check_webhook_auth(request: Request) -> None:

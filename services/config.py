@@ -96,6 +96,11 @@ class Settings:
     vapi_public_base_url: str = field(default_factory=lambda: _env("VAPI_PUBLIC_BASE_URL", ""))
     vapi_webhook_secret: str = field(default_factory=lambda: _env("VAPI_WEBHOOK_SECRET", ""))
     vapi_custom_llm_secret: str = field(default_factory=lambda: _env("VAPI_CUSTOM_LLM_SECRET", ""))
+    elevenlabs_voice_id: str = field(
+        default_factory=lambda: (
+            _env("ELEVENLABS_VOICE_ID", "") or _env("ELEVENLAB_VOICE_ID", "")
+        ).strip()
+    )
 
     frontend_origins: list[str] = field(
         default_factory=lambda: [
