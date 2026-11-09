@@ -1,7 +1,7 @@
 """Question-Answer orchestration graph.
 
 Input -> AgroBridge Agent (KB1) -> Verifier (KB2) -> revision loop (max N) -> output.
-A latency deadline is carried in state so the voice path never exceeds Voicebip's limit.
+A latency deadline is carried in state so the voice path never exceeds the telephony limit.
 """
 
 from __future__ import annotations

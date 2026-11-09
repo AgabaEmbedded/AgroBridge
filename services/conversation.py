@@ -165,6 +165,28 @@ def detect_crop(text: str) -> str | None:
     return None
 
 
+CROP_QUESTION_RE = re.compile(
+    r"\b(which|what) crop\b|\bwhat are you growing\b|\bcrop are you\b", re.IGNORECASE
+)
+
+
+def pending_crop_request(history: list[dict[str, str]] | None) -> str | None:
+    """Return the user request that a previous assistant crop question was following up."""
+    if not history:
+        return None
+    for index in range(len(history) - 1, -1, -1):
+        message = history[index]
+        if message.get("role") != "assistant":
+            continue
+        if not CROP_QUESTION_RE.search(str(message.get("content", ""))):
+            return None
+        for previous in range(index - 1, -1, -1):
+            if history[previous].get("role") == "user" and history[previous].get("content"):
+                return str(history[previous]["content"])
+        return None
+    return None
+
+
 def crop_from_history(history: list[dict[str, str]] | None) -> str | None:
     if not history:
         return None

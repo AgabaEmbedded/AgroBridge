@@ -180,6 +180,12 @@ async def vapi_chat_completions(request: Request):
 
     messages = body.get("messages") or []
     history, question = _history_and_question(messages if isinstance(messages, list) else [])
+    logger.info(
+        "Vapi custom LLM turn: %d message(s), %d history message(s), call=%s",
+        len(messages),
+        len(history),
+        _conversation_id(request, body),
+    )
     result = await _answer(question, history, _conversation_id(request, body))
 
     response_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"

@@ -3,7 +3,7 @@
 Two independent AI workflows over a shared local knowledge base, generation model and audit
 trail:
 
-1. **Question-Answer (voice):** Voicebip posts farmer questions; the AgroBridge agent answers
+1. **Question-Answer (voice):** the telephony provider/Vapi posts farmer questions; the AgroBridge agent answers
    from KB1, a policy verifier checks the recommendation against KB2, and unapproved drafts are
    revised and rechecked (bounded loop).
 2. **Policy Analyzer (web API):** a Policy Analyst (KB2) and a Crop Production Analyst (KB1)
@@ -16,7 +16,7 @@ only services (LLM, embeddings, retrieval, ingestion, audit).
 ## Architecture
 
 ```text
-Voicebip POST /  ->  QA graph
+Telephony POST /  ->  QA graph
                        ├─ agrobridge agent  (KB1 search)
                        ├─ verifier agent    (KB2 search)
                        ├─ revision agent    (loop, max MAX_REVISIONS)
@@ -84,7 +84,7 @@ Copy `.env.example` to `.env` and set `DEEPSEEK_API_KEY`. Nothing is hardcoded i
 | `MIN_RELEVANCE_DISTANCE` | `0.15` | cosine-distance cutoff (lower is closer; calibrated on crop questions) |
 | `VERIFIER_ENABLED` | `true` | policy verification node |
 | `MAX_REVISIONS` | `2` | maximum revision attempts |
-| `QA_BUDGET_SECONDS` | `4.3` | hard budget for the voice workflow (Voicebip allows ~5 s) |
+| `QA_BUDGET_SECONDS` | `4.3` | hard budget for the voice workflow (~5 s telephony ceiling) |
 | `QA_DEBUG_BUDGET_SECONDS` | `60` | budget for `/debug/ask` (full loop) |
 | `QA_ANSWER_MAX_TOKENS` / `VERIFIER_MAX_TOKENS` | `320` / `300` | structured output caps |
 | `GAP_MAX_ROUNDS` | `2` | agent communication rounds |
@@ -151,7 +151,7 @@ agent execution trace and a `tel:` button for the phone-based Farmer Assistant. 
 `build_instructions/frontend_run_instructions.md`.
 
 
-### `POST /` — Voicebip webhook
+### `POST /` — legacy telephony webhook
 
 Unchanged contract. `turn` runs the conversation router and, when needed, the QA graph with the
 voice budget; other events are acknowledged as before (`call.idle_silence` asks the caller to
@@ -242,7 +242,7 @@ Vapi appends `/chat/completions`, so each caller turn reaches
 prior user/assistant messages to the existing AgroBridge QA graph and returns either a normal
 `chat.completion` JSON body or an SSE stream (`stream=true`, ending with `data: [DONE]`).
 
-Server events are accepted at both the root `/` and `/vapi/webhook`, so the existing Voicebip
+Server events are accepted at both the root `/` and `/vapi/webhook`, so a legacy telephony
 webhook and Vapi can share one public URL. Informational events are acknowledged; `assistant-request`
 returns the assistant configuration immediately (well inside Vapi's 7.5 s limit).
 
@@ -265,7 +265,7 @@ VAPI_CUSTOM_LLM_SECRET=
   remain in this service.
 - The transient assistant requests the ElevenLabs voice `11labs` / `eleven_flash_v2_5` with the
   configured `ELEVENLABS_VOICE_ID`; the ElevenLabs key stays in the Vapi integration, not this repo.
-- Vapi custom-LLM requests use `VAPI_QA_BUDGET_SECONDS` (default 8 s) instead of the 4.3 s Voicebip
+- Vapi custom-LLM requests use `VAPI_QA_BUDGET_SECONDS` (default 8 s) instead of the 4.3 s telephony
   budget, because the AI router adds a model call before retrieval/answer generation.
 
 Quick checks:

@@ -11,6 +11,7 @@ from services.conversation import (
     classify_turn,
     crop_from_history,
     detect_crop,
+    pending_crop_request,
 )
 from services.conversation_ai import classify_with_ai
 from services.llm_service import LLMServiceError
@@ -18,6 +19,14 @@ from services.llm_service import LLMServiceError
 
 def _fallback_updates(question: str, history: list[dict[str, str]]) -> dict:
     turn = classify_turn(question, history)
+    pending = pending_crop_request(history)
+    if turn.intent == "crop_only" and turn.crop and pending:
+        return {
+            "intent": "crop_question",
+            "crop": turn.crop,
+            "direct_answer": None,
+            "question": pending,
+        }
     return {
         "intent": turn.intent,
         "crop": turn.crop,
@@ -45,6 +54,17 @@ async def conversation_node(state: dict) -> dict:
     crop = detect_crop(decision.crop or "") or detect_crop(question) or crop_from_history(history)
     direct = (decision.direct_reply or "").strip() or None
     fallback = classify_turn(question, history)
+    pending = pending_crop_request(history)
+
+    # The answer agent may have asked "which crop?" on the previous turn. A short crop answer
+    # continues that request; it is not a fresh crop-only turn.
+    if pending and crop and fallback.intent == "crop_only":
+        return {
+            "intent": "crop_question",
+            "crop": crop,
+            "direct_answer": None,
+            "question": pending,
+        }
 
     if intent in {"greeting", "social", "livestock", "out_of_scope", "clarification"}:
         direct = direct or fallback.direct_answer or CLARIFY_REPLY

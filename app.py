@@ -373,16 +373,16 @@ async def policy_analyzer(request: Request) -> JSONResponse:
 
 
 @app.post("/")
-async def handle_voicebip_webhook(request: Request):
+async def handle_telephony_webhook(request: Request):
     data = await read_payload(request)
     # Vapi posts {"message": {"type": ...}} to the Server URL. Delegate those events while
-    # keeping the existing Voicebip webhook contract on the same root path.
+    # keeping the legacy telephony webhook contract on the same root path.
     if isinstance(data.get("message"), dict) and data["message"].get("type"):
         return await vapi_webhook(request)
     event_type = data.get("event") or data.get("event_type")
     key = conversation_key(data)
     logger.info(
-        "Received Voicebip event: %s (memory: %s)", event_type, "keyed" if key else "stateless"
+        "Received telephony event: %s (memory: %s)", event_type, "keyed" if key else "stateless"
     )
 
     if event_type in {"call.initiated", "call.completed", "call.barge_in"}:

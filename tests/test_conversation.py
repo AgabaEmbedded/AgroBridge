@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from agents.conversation_agent import _fallback_updates
 from agents.qa_graph import run_question_answer
 from services.config import settings
 from services.conversation import classify_turn
@@ -65,6 +66,18 @@ def test_classifier() -> None:
     backchannel = classify_turn("do you hear me?", [])
     check(backchannel.intent == "clarification" and "hear" in (backchannel.direct_answer or "").lower(),
           "audio backchannel is conversational, not RAG")
+
+    history = [
+        {"role": "user", "content": "I am preparing land for farming, any help?"},
+        {"role": "assistant", "content": "Good land preparation... Which crop are you preparing the land for?"},
+    ]
+    continuation = _fallback_updates("maize", history)
+    check(
+        continuation["intent"] == "crop_question"
+        and continuation["crop"] == "maize"
+        and continuation["question"] == "I am preparing land for farming, any help?",
+        "crop answer continues the previous question",
+    )
 
     generic = classify_turn("what is crop rotation?", [])
     check(generic.intent == "general_crop_question" and not generic.direct_answer, "generic crop question routes to RAG")
