@@ -57,6 +57,12 @@ async def correct_transcript(question: str, history: list[dict[str, str]] | None
 
 
 _DETERMINISTIC_RULES = (
+    (r"\bprepare my lawn for planting\b", "prepare my land for planting"),
+    (r"\bprepare (?:the|my) lawn\b", "prepare my land"),
+    (r"\bwhat kind of soy does\b", "what kind of soil does"),
+    (r"\bwhat kind of side does\b", "what kind of soil does"),
+    (r"\bwhat kind of soy\b", "what kind of soil"),
+    (r"\bwhat kind of side\b", "what kind of soil"),
     (r"\bstart a line\b", "start a rice farm"),
     (r"\bline for my culture\b", "rice farm for my agriculture"),
     (r"\bfor my culture\b", "for my agriculture"),

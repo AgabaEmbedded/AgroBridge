@@ -2,9 +2,28 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from agents.schemas import EvidenceItem, QaAnswer, SynthesisReport, VerificationResult
+
+_INTERNAL_REFERENCE_RE = re.compile(
+    r"\[[^\]]*(?:KB[12]|p\.?\s*\d+|c\.?\s*\d+|chunk|document)[^\]]*\]"
+    r"|\bKB\s*(?:1|2|one|two)\b(?:\s*[/:.-]?\s*[A-Za-z0-9_]+){0,3}"
+    r"|\b(?:document|chunk|source)[ _-]?(?:id|index|ref(?:erence)?)\s*[:#]?\s*[A-Za-z0-9_./-]+"
+    r"|\b(?:page|p)\.?\s*\d+\b"
+    r"|\bchunk\s+\d+\b",
+    re.IGNORECASE,
+)
+
+
+def sanitize_spoken_text(text: str) -> str:
+    """Remove internal retrieval labels and metadata from farmer-facing speech."""
+    cleaned = _INTERNAL_REFERENCE_RE.sub(" ", str(text or ""))
+    cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
+    cleaned = re.sub(r"([.!?])\s*([.!?])+", r"\1", cleaned)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    return cleaned.strip(" ,;:")
 
 
 def format_evidence(hits: list[dict[str, Any]], max_chars: int = 1200) -> str:

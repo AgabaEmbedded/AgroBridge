@@ -188,6 +188,32 @@ def is_repeat_request(text: str) -> bool:
     return bool(REPEAT_RE.search(text))
 
 
+_AGRICULTURAL_HINTS = (
+    "crop", "farm", "land", "soil", "plant", "seed", "fertilizer", "weed",
+    "pest", "disease", "harvest", "irrigation", "maize", "rice", "cassava",
+    "yam", "tomato", "pepper", "cowpea", "groundnut", "sorghum", "millet",
+)
+
+
+def _substantive_pending_request(text: str) -> bool:
+    """Avoid resuming a greeting/filler as if it were a real pending question."""
+    cleaned = " ".join(str(text or "").split())
+    if not cleaned:
+        return False
+    tokens = re.findall(r"[a-z0-9]+", cleaned.lower())
+    if len(tokens) < 2:
+        return False
+    greeting = GREETING_RE.match(cleaned)
+    if greeting and not cleaned[greeting.end():].strip(" ,.!-"):
+        return False
+    social = SOCIAL_RE.match(cleaned)
+    if social and not cleaned[social.end():].strip(" ,.!-"):
+        return False
+    if detect_crop(cleaned):
+        return True
+    return len(tokens) >= 3 or any(term in cleaned.lower() for term in _AGRICULTURAL_HINTS)
+
+
 def pending_crop_request(history: list[dict[str, str]] | None) -> str | None:
     """Return the user request that a previous assistant crop question was following up."""
     if not history:
@@ -200,7 +226,8 @@ def pending_crop_request(history: list[dict[str, str]] | None) -> str | None:
             return None
         for previous in range(index - 1, -1, -1):
             if history[previous].get("role") == "user" and history[previous].get("content"):
-                return str(history[previous]["content"])
+                content = str(history[previous]["content"])
+                return content if _substantive_pending_request(content) else None
         return None
     return None
 

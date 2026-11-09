@@ -6,7 +6,7 @@ import asyncio
 import time
 
 from agents import prompts
-from agents.evidence import format_evidence, sanitize_answer, sanitize_verification
+from agents.evidence import format_evidence, sanitize_answer, sanitize_spoken_text, sanitize_verification
 from agents.runtime import call_timeout, expired, timings_with
 from agents.schemas import (
     EvidenceItem,
@@ -130,7 +130,8 @@ async def agrobridge_node(state: dict) -> dict:
     started = time.monotonic()
     question = state["question"]
     crop = state.get("crop")
-    retrieval_query = f"{crop} {question}" if crop else question
+    query_parts = [crop or "", str(state.get("topic") or ""), question]
+    retrieval_query = " ".join(dict.fromkeys(part.strip() for part in query_parts if str(part).strip()))
     try:
         hits = await asyncio.to_thread(
             search_kb1, retrieval_query, None, state.get("top_k") or settings.top_k
@@ -141,6 +142,7 @@ async def agrobridge_node(state: dict) -> dict:
             "error": "retrieval_error",
             "draft": draft.model_dump(),
             "hits": [],
+            "retrieval_query": retrieval_query,
             "timings": timings_with(state, agrobridge_ms=(time.monotonic() - started) * 1000),
         }
 
@@ -158,6 +160,7 @@ async def agrobridge_node(state: dict) -> dict:
             "error": "insufficient_evidence",
             "draft": draft.model_dump(),
             "hits": hits,
+            "retrieval_query": retrieval_query,
             "timings": timings_with(state, agrobridge_ms=(time.monotonic() - started) * 1000),
         }
 
@@ -190,6 +193,7 @@ async def agrobridge_node(state: dict) -> dict:
             "error": "llm_error",
             "draft": draft.model_dump(),
             "hits": useful,
+            "retrieval_query": retrieval_query,
             "timings": timings_with(state, agrobridge_ms=(time.monotonic() - started) * 1000),
         }
 
@@ -208,6 +212,7 @@ async def agrobridge_node(state: dict) -> dict:
         "draft": answer.model_dump(),
         "hits": useful,
         "dropped_citations": dropped,
+        "retrieval_query": retrieval_query,
         "timings": timings_with(state, agrobridge_ms=(time.monotonic() - started) * 1000),
     }
 
@@ -391,9 +396,17 @@ def finalize_node(state: dict) -> dict:
     draft = state.get("draft") or {}
     verification = state.get("verification") or {}
     status = verification.get("status") or "NEEDS_REVIEW"
-    answer = str(draft.get("answer") or "").strip()
+    answer = sanitize_spoken_text(str(draft.get("answer") or ""))
     intent = state.get("intent")
-    direct_answer = str(state.get("direct_answer") or "").strip()
+    direct_answer = sanitize_spoken_text(str(state.get("direct_answer") or ""))
+    interpretation = {
+        "interpreted_question": state.get("interpreted_question"),
+        "interpretation_status": state.get("interpretation_status"),
+        "suspected_substitutions": state.get("suspected_substitutions") or [],
+        "topic": state.get("topic"),
+        "objective": state.get("objective"),
+        "pending_clarification": state.get("pending_clarification"),
+    }
 
     if direct_answer:
         final = {
@@ -411,6 +424,7 @@ def finalize_node(state: dict) -> dict:
             "corrected_question": state.get("corrected_question") or state.get("question", ""),
             "correction_status": state.get("correction_status"),
             "correction": state.get("correction") or {},
+            **interpretation,
         }
         write_audit(
             "question_answer",
@@ -419,6 +433,7 @@ def finalize_node(state: dict) -> dict:
                 "corrected_question": state.get("corrected_question") or state.get("question", ""),
                 "correction_status": state.get("correction_status"),
                 "correction": state.get("correction") or {},
+                **interpretation,
                 "conversation_id": state.get("conversation_id"),
                 "intent": intent,
                 "crop": state.get("crop"),
@@ -468,6 +483,7 @@ def finalize_node(state: dict) -> dict:
         "corrected_question": state.get("corrected_question") or state.get("question", ""),
         "correction_status": state.get("correction_status"),
         "correction": state.get("correction") or {},
+        **interpretation,
     }
 
     audit_record = {
@@ -475,6 +491,7 @@ def finalize_node(state: dict) -> dict:
         "corrected_question": state.get("corrected_question") or state.get("question", ""),
         "correction_status": state.get("correction_status"),
         "correction": state.get("correction") or {},
+        **interpretation,
         "conversation_id": state.get("conversation_id"),
         "intent": intent,
         "crop": state.get("crop"),
@@ -482,6 +499,7 @@ def finalize_node(state: dict) -> dict:
         + (["verifier"] if settings.verifier_enabled else [])
         + (["revision"] * int(state.get("revisions") or 0)),
         "knowledge_bases": ["KB1", "KB2"] if state.get("policy_hits") else ["KB1"],
+        "retrieval_query": state.get("retrieval_query"),
         "retrieved_citations": [hit.get("citation") for hit in state.get("hits") or []],
         "policy_citations": [hit.get("citation") for hit in state.get("policy_hits") or []],
         "draft": draft,

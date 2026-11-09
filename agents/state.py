@@ -15,6 +15,13 @@ class QAState(TypedDict, total=False):
     intent: str
     crop: str | None
     direct_answer: str | None
+    interpreted_question: str | None
+    interpretation_status: str
+    suspected_substitutions: list[str]
+    topic: str | None
+    objective: str | None
+    retrieval_query: str
+    pending_clarification: str | None
     history: list[dict[str, str]]
     conversation_id: str | None
     audit_id: str

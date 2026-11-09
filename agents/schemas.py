@@ -136,6 +136,14 @@ class CorrectedTranscript(BaseModel):
     notes: str = ""
 
 
+InterpretationStatus = Literal[
+    "CLEAR_INTENT",
+    "LIKELY_INTENT",
+    "AMBIGUOUS_INTENT",
+    "INSUFFICIENT_INPUT",
+]
+
+
 ConversationIntent = Literal[
     "greeting",
     "social",
@@ -152,6 +160,18 @@ ConversationIntent = Literal[
 class ConversationDecision(BaseModel):
     intent: ConversationIntent
     crop: str | None = None
+    interpreted_question: str | None = Field(
+        default=None,
+        description="Clean, context-resolved version of the farmer question; null for direct non-RAG replies",
+    )
+    topic: str | None = Field(default=None, description="Short agricultural topic, e.g. soil or planting")
+    objective: str | None = Field(default=None, description="What the farmer is trying to do")
+    interpretation_status: InterpretationStatus = "CLEAR_INTENT"
+    suspected_substitutions: list[str] = Field(default_factory=list)
+    clarification_question: str | None = Field(
+        default=None,
+        description="One targeted clarification question when interpretation is ambiguous",
+    )
     direct_reply: str | None = Field(
         default=None,
         description="Short spoken reply for greetings, clarification and out-of-scope turns; null for crop RAG turns",
