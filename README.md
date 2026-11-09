@@ -168,14 +168,17 @@ curl -X POST http://localhost:8000/ -H "Content-Type: application/json" \
 - greetings/social openings receive a natural reply and never touch RAG;
 - livestock questions are politely declined with a veterinarian/extension referral;
 - clear out-of-scope questions are declined;
-- a crop-production question with no crop (e.g. “my leaves are yellow”) asks which crop;
+- a farming/crop question with no crop (e.g. “my leaves are yellow” or “I am preparing land for
+  farming”) goes to the answer agent; the agent decides whether a crop follow-up is needed;
 - once a crop is named, it is retained from earlier user turns, prepended to retrieval queries and
   used to filter evidence, so the assistant does not re-ask and does not mix crops;
+- greetings use “Hello! I am AgroBridge. What can I help you with?” and do not demand a crop;
 - specific advice is only returned when KB1 evidence supports it and at least one citation
   survives validation; otherwise the caller is asked for the missing information.
 
 An LLM router makes the intent/crop decision and writes the short reply for greetings, social
-turns, livestock redirects, out-of-scope requests and clarifications. The rule-based classifier is
+turns, livestock redirects, out-of-scope requests and unintelligible turns. Missing a crop is not a
+triaging failure; farming questions proceed to the answer agent, which may ask a follow-up itself. The rule-based classifier is
 retained only as a fallback when the AI call fails or the latency budget is exhausted
 (`CONVERSATION_AI_ENABLED`, `CONVERSATION_AI_TIMEOUT`).
 

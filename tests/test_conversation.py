@@ -33,7 +33,16 @@ def test_classifier() -> None:
     check(social.intent == "social", "social closing is handled directly")
 
     missing_crop = classify_turn("my leaves are yellow", [])
-    check(missing_crop.intent == "clarification" and missing_crop.direct_answer, "missing crop asks for crop")
+    check(
+        missing_crop.intent == "general_crop_question" and not missing_crop.direct_answer,
+        "missing crop still reaches the answer agent",
+    )
+
+    land = classify_turn("I am preparing land for farming, any help?", [])
+    check(
+        land.intent == "general_crop_question" and not land.direct_answer,
+        "general farming question reaches the answer agent",
+    )
 
     crop_only = classify_turn("I grow maize", [])
     check(crop_only.intent == "crop_only" and crop_only.crop == "maize", "crop-only reply asks a useful question")
@@ -77,7 +86,7 @@ async def test_graph_direct() -> None:
     for question, intent in [
         ("hello", "greeting"),
         ("my cow has a fever", "livestock"),
-        ("my leaves are yellow", "clarification"),
+        ("can you hear me?", "clarification"),
         ("thank you", "social"),
     ]:
         state = await run_question_answer(question, history=[], audit_id=f"conv-{intent}", budget_seconds=10)

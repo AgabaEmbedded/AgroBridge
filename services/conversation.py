@@ -107,16 +107,6 @@ CROP_ONLY_FILLER = {
     "ask", "also", "just", "want", "wanted",
 }
 
-NEEDS_CROP_TERMS = (
-    "fertilizer", "fertiliser", "manure", "spacing", "seed", "seeds", "variety",
-    "varieties", "plant", "planting", "sow", "sowing", "transplant", "harvest",
-    "harvesting", "storage", "store", "irrigation", "irrigate", "yield", "weed",
-    "weeds", "pest", "pests", "disease", "diseases", "insect", "insects",
-    "spray", "spraying", "yellow", "yellowing", "wilting", "wilt", "spots",
-    "dying", "died", "holes", "rot", "blight", "mosaic", "stunted", "leaves",
-    "leaf", "stem", "root", "roots", "fall armyworm", "armyworm",
-)
-
 PROBLEM_TERMS = (
     "yellow", "yellowing", "wilting", "wilt", "spots", "dying", "died", "holes",
     "rot", "blight", "mosaic", "stunted", "pest", "pests", "disease", "diseases",
@@ -124,10 +114,7 @@ PROBLEM_TERMS = (
 )
 
 
-GREETING_REPLY = (
-    "Hello! I am AgroBridge, your crop-production assistant. I can help with querries concerning your farm, "
-    "what will you need my assistance with today?"
-)
+GREETING_REPLY = "Hello! I am AgroBridge. What can I help you with?"
 SOCIAL_REPLY = (
     "You are welcome. I am here whenever you need help with a crop-production question."
 )
@@ -254,11 +241,6 @@ def classify_turn(question: str, history: list[dict[str, str]] | None = None) ->
     crop = detect_crop(cleaned) or crop_from_history(history)
     if crop and _is_crop_only(cleaned, crop):
         return Turn("crop_only", crop, CROP_ONLY_TEMPLATE.format(crop=crop), cleaned)
-
-    if not crop and any(
-        re.search(rf"\b{re.escape(term)}\b", lowered) for term in NEEDS_CROP_TERMS
-    ):
-        return Turn("clarification", None, NO_CROP_REPLY, cleaned)
 
     if not crop:
         return Turn("general_crop_question", None, None, cleaned)

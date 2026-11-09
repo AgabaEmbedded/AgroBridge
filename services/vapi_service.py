@@ -32,9 +32,7 @@ FALLBACK = (
     "I am having trouble checking the guidance right now. Please try again shortly "
     "or contact your local agricultural extension officer."
 )
-FIRST_MESSAGE = (
-    "Hello! I am AgroBridge, your crop-production assistant. Which crop are you asking about?"
-)
+FIRST_MESSAGE = "Hello! I am AgroBridge. What can I help you with?"
 
 
 def _public_base(request: Request) -> str:

@@ -58,7 +58,7 @@ async def conversation_node(state: dict) -> dict:
     if intent == "crop_only":
         if not crop:
             return {
-                "intent": "clarification",
+                "intent": "greeting",
                 "crop": None,
                 "direct_answer": NO_CROP_REPLY,
                 "question": question,
@@ -67,14 +67,6 @@ async def conversation_node(state: dict) -> dict:
             "intent": "crop_only",
             "crop": crop,
             "direct_answer": direct or CROP_ONLY_TEMPLATE.format(crop=crop),
-            "question": question,
-        }
-
-    if intent in {"crop_question", "crop_problem"} and not crop:
-        return {
-            "intent": "clarification",
-            "crop": None,
-            "direct_answer": NO_CROP_REPLY,
             "question": question,
         }
 
