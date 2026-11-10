@@ -12,7 +12,7 @@
 | Requirement | Status | Evidence | What is missing / risk |
 |---|---|---|---|
 | **1. Innovative AI application in a domain** | **Partially addressed** | Voice crop-production assistant, retrieval-grounded answers, independent policy verifier, policy-gap workspace; live Vapi path verified with supplied examples. | The report claims only crop production; livestock is out of scope. No formal farmer-usability study or benchmark. |
-| **2. Country-specific knowledge base** | **Partially addressed** | 116-document catalogue (8,900 pages); 77 KB1 documents / 7,085 chunks; page-aware 1,600-character chunks with 240 overlap; metadata, E5 embeddings, ChromaDB; citations. | **Active KB2 has only 6 budget/performance documents (4,194 chunks).** The catalogue’s other 33 KB2 policy/legal/institutional documents are not active. This is the most important submission weakness. |
+| **2. Country-specific knowledge base** | **Partially addressed** | 116-document catalogue (8,900 pages); 77 catalogued KB1 documents / 6,743 active chunks (68 documents); page-aware 1,600-character chunks with 240 overlap; metadata, E5 embeddings, ChromaDB; citations. | **Active KB2 has only 6 budget/performance documents (4,194 chunks); five are catalogued, so 34 of 39 catalogued KB2 documents are not active.** KB1 is also partial: 68 of 77 catalogued documents are indexed, with nine aquaculture documents missing. This is the most important submission weakness. |
 | **3. Use of ITU reference code for KB creation** | **Not addressed / unverified** | The project has its own ingestion pipeline and metadata catalogue. | No evidence that `CrashingGuru/ITUAIReadiness` was used or mapped. Do not claim it. If time permits, document the mapping or explicitly state the independent implementation. |
 | **4. Innovative AI solution role** | **Fully addressed** | Conversation router, contextual ASR interpretation, KB1 answer agent, citation-constrained speech, voice path. | No human evaluation; English-only voice path. |
 | **5. Policy and legal adviser role** | **Partially addressed** | KB2 verifier returns APPROVED / UNAPPROVED / NEEDS_REVIEW; safe referral; policy-gap graph. | Policy/legal coverage is only as broad as the active KB2 index; no formal legal review; no jurisdiction-specific rule engine. |
@@ -138,7 +138,7 @@
 - [x] `submission/AgroBridge_Report_Review.md`
 - [x] Report exported to PDF and verified at 4 pages.
 - [x] Technical claims checked against current code: Vapi, Deepgram Nova-3, ElevenLabs, QA graph, verifier, gap graph, audit fields.
-- [x] Current KB counts verified: KB1 7,085 chunks / 77 docs; KB2 4,194 chunks / 6 docs.
+- [x] Current KB counts verified: KB1 6,743 chunks / 68 active docs (77 catalogued); KB2 4,194 chunks / 6 docs.
 - [ ] Full KB2 policy/legal reindex and post-reindex verification.
 - [ ] Team leader/member/contact details and public GitHub URL inserted.
 - [ ] GitHub repository cleaned of secrets, logs, resources, indexes and local data.
