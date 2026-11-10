@@ -86,7 +86,7 @@ async def test_qa() -> None:
 
     check(bool(final.get("voice_answer")), "QA produced a voice answer")
     check(
-        final["verification_status"] in {"APPROVED", "UNAPPROVED", "NEEDS_REVIEW"},
+        final["verification_status"] in {"APPROVED", "UNAPPROVED", "NEEDS_REVIEW", "NOT_REQUIRED"},
         f"QA verification status is valid ({final['verification_status']})",
     )
     check(bool(draft.get("answer")), "QA draft answer is non-empty")

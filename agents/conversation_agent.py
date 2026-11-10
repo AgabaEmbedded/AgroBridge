@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from agents.runtime import remaining
 from services.config import settings
 from services.conversation import (
@@ -152,6 +154,42 @@ def _short_answer_updates(question: str, history: list[dict[str, str]]) -> dict 
     return None
 
 
+_FAST_PATH_TOPIC_RE = re.compile(
+    r"\b(?:soil|land|plant|planting|seed|seedling|variety|fertilizer|fertiliser|"
+    r"water|irrigation|weed|pest|disease|yellow|leaves|leaf|harvest|spacing|"
+    r"nursery|storage|spray|dose|dosage|rate)\b",
+    re.IGNORECASE,
+)
+
+
+def _fast_path_updates(question: str, history: list[dict[str, str]]) -> dict | None:
+    """Route clear, rule-resolvable turns without paying for the AI router."""
+    turn = classify_turn(question, history)
+    if turn.intent in {"greeting", "social", "livestock", "out_of_scope"} and turn.direct_answer:
+        return {
+            "intent": turn.intent,
+            "crop": turn.crop,
+            "direct_answer": turn.direct_answer,
+            "question": turn.cleaned_question or question,
+            "interpreted_question": None,
+            **_interpretation_fields(),
+        }
+    if turn.intent in {"crop_question", "crop_problem"} and turn.crop:
+        # A known crop plus an explicit agronomic topic is clear enough for the
+        # deterministic route. Keep ambiguous/noisy turns on the AI router.
+        words = [word for word in question.lower().split() if word.isalpha()]
+        if len(words) >= 2 and _FAST_PATH_TOPIC_RE.search(question):
+            return {
+                "intent": turn.intent,
+                "crop": turn.crop,
+                "direct_answer": None,
+                "question": turn.cleaned_question or question,
+                "interpreted_question": turn.cleaned_question or question,
+                **_interpretation_fields(),
+            }
+    return None
+
+
 def _fallback_updates(question: str, history: list[dict[str, str]]) -> dict:
     turn = classify_turn(question, history)
     pending = pending_crop_request(history)
@@ -202,6 +240,10 @@ async def conversation_node(state: dict) -> dict:
     short = _short_answer_updates(question, history)
     if short:
         return short
+
+    fast = _fast_path_updates(question, history)
+    if fast:
+        return fast
 
     if not settings.conversation_ai_enabled or remaining(state) < 1.2:
         return _fallback_updates(question, history)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 
 from agents import prompts
@@ -38,6 +39,23 @@ UNAPPROVED_VOICE = (
     "Please contact your local agricultural extension officer or veterinarian before acting on it."
 )
 REVIEW_CAVEAT = " Please confirm this with your local agricultural extension officer."
+
+# The model verifier is reserved for answers that can carry regulated or
+# policy-sensitive advice. General crop guidance still carries citations and a
+# source allow-list, but does not need a second model round-trip.
+_VERIFICATION_REQUIRED_RE = re.compile(
+    r"\b(?:pesticide|herbicide|insecticide|fungicide|nematicide|chemical|spray|"
+    r"spraying|dose|dosage|rate|fertilizer|fertiliser|urea|npk|withdrawal|poison|"
+    r"label|seed treatment|soil treatment)\b",
+    re.IGNORECASE,
+)
+
+
+def verification_required(question: str, draft: QaAnswer) -> bool:
+    text = " ".join(
+        [question, draft.answer, *[str(item) for item in (draft.recommendations or [])]]
+    )
+    return bool(_VERIFICATION_REQUIRED_RE.search(text))
 
 
 def answer_system_prompt() -> str:
@@ -258,6 +276,16 @@ async def verifier_node(state: dict) -> dict:
             "timings": timings_with(state, verifier_ms=(time.monotonic() - started) * 1000),
         }
 
+    if not verification_required(question, draft):
+        return {
+            "verification": _verification(
+                "NOT_REQUIRED",
+                "No regulated input, dosage or policy-sensitive claim was detected; "
+                "the answer remains evidence-grounded.",
+            ),
+            "timings": timings_with(state, verifier_ms=(time.monotonic() - started) * 1000),
+        }
+
     if expired(state, minimum=1.0):
         return {
             "verification": _verification(
@@ -459,9 +487,14 @@ def finalize_node(state: dict) -> dict:
         )
         return {"final": final}
 
-    if status == "APPROVED":
+    if status in {"APPROVED", "NOT_REQUIRED"}:
         voice_answer = answer
-        note = "Verified against KB2 policy evidence."
+        note = (
+            "Verified against KB2 policy evidence."
+            if status == "APPROVED"
+            else "No regulated input, dosage or policy-sensitive claim was detected; "
+            "the answer remains evidence-grounded."
+        )
     elif status == "UNAPPROVED":
         voice_answer = UNAPPROVED_VOICE
         note = "Unapproved after the revision limit; the farmer receives a safe referral instead."

@@ -13,7 +13,8 @@ if str(ROOT) not in sys.path:
 
 from agents import conversation_agent
 from agents.evidence import sanitize_spoken_text
-from agents.schemas import ConversationDecision
+from agents.qa_agents import finalize_node, verification_required, verifier_node
+from agents.schemas import ConversationDecision, QaAnswer
 from services.config import settings
 from services.conversation import pending_crop_request
 from services.transcript_service import normalise_transcript
@@ -149,6 +150,61 @@ async def test_confirmation_sequence() -> None:
           "a one-word soil reply uses the confirmed maize crop")
 
 
+async def test_fast_path_and_verification() -> None:
+    original = conversation_agent.classify_with_ai
+    settings.conversation_ai_enabled = True
+
+    async def should_not_run(question, history, timeout):
+        raise AssertionError("clear crop turn should not call the AI router")
+
+    conversation_agent.classify_with_ai = should_not_run
+    try:
+        clear = await conversation_agent.conversation_node(
+            _state("My maize leaves are turning yellow.")
+        )
+        check(clear["intent"] == "crop_problem" and clear["crop"] == "maize",
+              "clear crop question uses the deterministic fast path")
+        greeting = await conversation_agent.conversation_node(_state("Hello."))
+        check(greeting["intent"] == "greeting" and greeting["direct_answer"],
+              "clear greeting uses the deterministic fast path")
+    finally:
+        conversation_agent.classify_with_ai = original
+        settings.conversation_ai_enabled = False
+
+    low = QaAnswer(answer="Maize grows best on well drained soil.", confidence="medium")
+    high = QaAnswer(answer="Apply NPK fertilizer at the labelled rate.", confidence="medium")
+    check(not verification_required("What soil does maize need?", low),
+          "general soil guidance skips the model verifier")
+    check(verification_required("What fertilizer should I use?", high),
+          "fertilizer guidance still requires the model verifier")
+
+    out = await verifier_node(
+        {
+            "question": "What soil does maize need?",
+            "draft": low.model_dump(),
+            "deadline": time.monotonic() + 10,
+            "timings": {},
+            "top_k": 4,
+        }
+    )
+    check(out["verification"]["status"] == "NOT_REQUIRED",
+          "low-risk answer returns NOT_REQUIRED without a verifier model call")
+
+    final = finalize_node(
+        {
+            "question": "What soil does maize need?",
+            "draft": low.model_dump(),
+            "verification": out["verification"],
+            "intent": "crop_question",
+            "crop": "maize",
+            "timings": {},
+        }
+    )["final"]
+    check(final["verification_status"] == "NOT_REQUIRED"
+          and final["voice_answer"] == low.answer,
+          "low-risk final answer keeps the answer without a review caveat")
+
+
 async def test_contextual_node() -> None:
     original = conversation_agent.classify_with_ai
     settings.conversation_ai_enabled = True
@@ -228,6 +284,7 @@ def main() -> int:
     test_pending_request_gate()
     asyncio.run(test_repeated_clarification())
     asyncio.run(test_confirmation_sequence())
+    asyncio.run(test_fast_path_and_verification())
     asyncio.run(test_contextual_node())
     print("All transcript resilience tests passed")
     return 0
