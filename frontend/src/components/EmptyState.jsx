@@ -9,8 +9,8 @@ const EXAMPLES = [
   "Which crop-production needs are missing from current agricultural policy?",
 ];
 
-const PHONE_DISPLAY = "+234 201 350 2062";
-const PHONE_HREF = "tel:+2342013502062";
+const PHONE_DISPLAY = "+1 405 716 9054";
+const PHONE_HREF = "tel:+14057169054";
 
 export function EmptyState({ onExample }) {
   return (
