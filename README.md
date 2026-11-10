@@ -35,7 +35,7 @@ POST /api/gap-analysis -> Gap graph
 services/
   config.py             env-driven settings
   llm_service.py        JSON structured outputs, validation, retry
-  embedding_service.py  local e5 model (query/passage prefixes)
+  embedding_service.py  Gemini gemini-embedding-001 (retrieval task types)
   retrieval_service.py  search_kb1 / search_kb2 / get_document
   document_processor.py page-aware extraction + incremental sync
   audit_service.py      JSONL audit records
@@ -69,8 +69,8 @@ pip install -r requirements.txt
 python setup_windows_runtime.py      # Windows only
 ```
 
-Generation uses `deepseek-flash`; embeddings use `intfloat/multilingual-e5-small` locally. They
-are configured independently.
+Generation uses `deepseek-flash`; embeddings use Gemini `gemini-embedding-001`. They are
+configured independently.
 
 ## Configure
 
@@ -79,7 +79,9 @@ Copy `.env.example` to `.env` and set `DEEPSEEK_API_KEY`. Nothing is hardcoded i
 | Variable | Default | Purpose |
 |---|---|---|
 | `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` | `deepseek-flash` / `https://api.deepseek.com` | generation provider |
-| `EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | local embeddings |
+| `EMBEDDING_MODEL` | `gemini-embedding-001` | Gemini embeddings |
+| `EMBEDDING_DIMENSION` | `1536` | Gemini output dimension; must match the index |
+| `GEMINI_API_KEY` / `GOOGLE_API_KEY` | — | Gemini embedding API key |
 | `TOP_K` | `4` | KB hits per QA agent call |
 | `MIN_RELEVANCE_DISTANCE` | `1.25` | provisional cosine filter |
 | `VERIFIER_ENABLED` | `true` | policy verification node |
@@ -205,10 +207,15 @@ communication between GA1/GA2 and audit records.
 - **`WinError 1114` / `1114 c10.dll` / silent exit 5 on Windows:** System32's Visual C++ runtime is
   older than torch/chromadb expect. Install the latest *Microsoft Visual C++ Redistributable (x64)*,
   or rely on `msvc-runtime` + `setup_windows_runtime.py` (the embedding service also preloads it).
-- **First request is slow:** importing `transformers`/`sentence-transformers` takes 1–4 minutes on
-  older CPUs. The lifespan hook warms the model; the first real turn is then ~2 s.
+- **Embedding model changed:** reindex both KBs after setting `GEMINI_API_KEY`:
+  `python ingest.py --reset`. This drops the old 384-d collections and rebuilds them at the
+  configured Gemini dimension. Do not run it without a valid key.
+- **First embedding request is slow:** the first Gemini call includes network and provider
+  latency; subsequent calls are normally faster.
 - **`indexed_chunks` is 0:** run `python ingest.py`. Files must be under `documents/KB1` or
   `documents/KB2`; files directly in `documents/` are ignored.
 - **Scanned PDFs:** no extractable text means the file is skipped; OCR it first.
 - **Old index:** the pre-multi-agent `agrobridge_knowledge` collection is unused; delete it with
   `python ingest.py --drop-legacy`.
+- **Dimension mismatch:** if the index was built with the old E5 model, run
+  `python ingest.py --reset`; Gemini vectors are 1,536-dimensional, not 384.

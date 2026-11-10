@@ -44,7 +44,22 @@ class Settings:
     documents_dir: Path = field(default_factory=lambda: BASE_DIR / "documents")
     chroma_dir: Path = field(default_factory=lambda: BASE_DIR / "chroma_db")
     audit_dir: Path = field(default_factory=lambda: BASE_DIR / "logs")
-    embedding_model: str = field(default_factory=lambda: _env("EMBEDDING_MODEL", "intfloat/multilingual-e5-small"))
+    embedding_model: str = field(default_factory=lambda: _env("EMBEDDING_MODEL", "gemini-embedding-001"))
+    embedding_dimension: int = field(default_factory=lambda: _env_int("EMBEDDING_DIMENSION", 1536))
+    gemini_api_key: str = field(
+        default_factory=lambda: _env("GEMINI_API_KEY", "") or _env("GOOGLE_API_KEY", "")
+    )
+    gemini_api_base_url: str = field(
+        default_factory=lambda: _env(
+            "GEMINI_API_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"
+        )
+    )
+    gemini_embedding_timeout: float = field(
+        default_factory=lambda: _env_float("GEMINI_EMBEDDING_TIMEOUT", 30.0)
+    )
+    gemini_embedding_retries: int = field(
+        default_factory=lambda: max(1, _env_int("GEMINI_EMBEDDING_RETRIES", 3))
+    )
     kb1_collection: str = field(default_factory=lambda: _env("KB1_COLLECTION", "agrobridge_kb1"))
     kb2_collection: str = field(default_factory=lambda: _env("KB2_COLLECTION", "agrobridge_kb2"))
 
