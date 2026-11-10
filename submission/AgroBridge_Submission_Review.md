@@ -4,15 +4,19 @@
 **Verified page count:** 4 pages when exported to PDF and checked in Word. Limit: 5 pages.  
 **Structure followed:** the sample submission headings: Introduction; Description of the use case; Use case requirements; Mapping with ITU-T Y.3172, AI Readiness 2.0 and domain-specific policies; Error scenarios; Policy gaps and standards gaps; References.
 
+## Framing
+
+The report is now connectivity-first: the main product is a phone call to the AgroBridge crop agent. The policy analyzer is explicitly described as the hackathon-required add-on, not the main service. The problem statement is access/connectivity — basic phone, voice coverage, local language and no smartphone/data plan — not fragmented information or another central database.
+
 ## What the submission covers
 
 - Simple-language, high-level narrative; implementation details are reduced.
-- The crop-production problem in Nigeria, using two current World Bank indicators (2024).
-- The voice path: phone call → Vapi → Deepgram Nova-3 → custom LLM → KB1 answer → KB2 verifier → ElevenLabs voice.
-- The policy path: PA/CPA exchange, synthesis and gap status.
+- The connectivity problem in Nigeria, using current World Bank agriculture and internet-use indicators (2024).
+- The main phone path: basic phone → local voice number → crop answer → safety check → spoken reply. No smartphone, app, account or data plan for the farmer.
+- The policy add-on: PA/CPA exchange, synthesis and gap status for analysts.
 - Y.3172 Figure 3 mapping: SRC, C, PP, M, P, D, SINK, MLFO and ML sandbox.
 - Selected AI Readiness 2.0 dimensions: open data/open source; generative AI; contextualisation; cross-domain integration; human supervision; policy opportunity; social inclusion; infrastructure/energy.
-- A four-step sequenced error scenario covering ASR error, unsafe advice, policy delivery and commercial controversy.
+- A four-step sequenced error scenario covering a poor phone line, unsafe advice, the policy add-on and commercial controversy.
 - Policy and standards gaps, with global examples.
 
 ## Full-scope assumption used in the report
