@@ -4,6 +4,7 @@ Usage:
     python ingest.py                 # sync KB1 and KB2
     python ingest.py --kb KB1        # only agriculture
     python ingest.py --kb KB2        # only policy
+    python ingest.py --reset         # recreate collections after an embedding-model change
     python ingest.py --drop-legacy   # also delete the old single-collection index
 
 Chunks are content-addressed, so re-running only embeds new/changed chunks and removes
@@ -17,7 +18,8 @@ from pathlib import Path
 
 from services.config import settings
 from services.document_processor import SUPPORTED_SUFFIXES, build_kb_records, sync_collection
-from services.retrieval_service import get_client, get_collection
+from services.embedding_service import embed_query
+from services.retrieval_service import get_client, get_collection, reset_collection
 
 LEGACY_COLLECTION = "agrobridge_knowledge"
 
@@ -64,10 +66,27 @@ def main() -> None:
         action="store_true",
         help=f"Delete the pre-multi-agent '{LEGACY_COLLECTION}' collection",
     )
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Drop and recreate the target collection(s) before embedding; required after changing embedding models.",
+    )
     args = parser.parse_args()
 
     _warn_flat_files()
     targets = ["KB1", "KB2"] if args.kb == "all" else [args.kb]
+    if args.reset:
+        # Probe the provider before deleting an existing index; a missing key or bad
+        # dimension must not leave the knowledge base empty.
+        probe = embed_query("AgroBridge embedding configuration probe")
+        if len(probe) != settings.embedding_dimension:
+            raise SystemExit(
+                f"Embedding dimension {len(probe)} does not match "
+                f"EMBEDDING_DIMENSION={settings.embedding_dimension}."
+            )
+        for kb in targets:
+            reset_collection(kb)
+            print(f"{kb}: collection reset for {settings.embedding_model}")
     for kb in targets:
         ingest(kb)
 

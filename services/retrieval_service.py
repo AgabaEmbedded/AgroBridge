@@ -56,6 +56,18 @@ def get_client():
     return _client_instance()
 
 
+def reset_collection(kb: str):
+    """Drop and recreate a KB collection after an embedding-model change."""
+    kb = kb.upper()
+    name = collection_name(kb)
+    _collections.pop(kb, None)
+    try:
+        _client_instance().delete_collection(name)
+    except Exception:
+        pass
+    return get_collection(kb)
+
+
 def _where(filters: dict[str, Any] | None):
     if not filters:
         return None
