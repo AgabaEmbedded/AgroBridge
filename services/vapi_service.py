@@ -55,22 +55,9 @@ def assistant_config(request: Request) -> dict[str, Any]:
             "url": f"{_public_base(request)}/vapi",
         },
         "transcriber": {
-            "provider": "deepgram",
-            "model": "nova-3",
+            "provider": "assembly-ai",
+            "speechModel": "universal-3-6-pro",
             "language": "en",
-            "smartFormat": True,
-            "keyterm": [
-                "maize",
-                "AgroBridge",
-                "soil type",
-                "seedbed",
-                "fertilizer",
-                "land preparation",
-                "cassava",
-                "rice",
-                "tomato",
-                "pepper",
-            ],
         },
     }
     if settings.elevenlabs_voice_id:
