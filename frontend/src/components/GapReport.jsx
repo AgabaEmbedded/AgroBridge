@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/accordion";
 import { GapCard } from "@/components/GapCard";
 import { collectCitations } from "@/lib/citations";
-import { GAP_SECTIONS, STATUS_META, formatDuration } from "@/lib/gaps";
+import { GAP_SECTIONS, formatDuration } from "@/lib/gaps";
 
 const SECTION_ICONS = {
   policy_coverage_gaps: BookOpen,
@@ -32,6 +32,10 @@ export function GapReport({ result, onOpenSources, onCitation }) {
     (sum, section) => sum + (report[section.key]?.length || 0),
     0,
   );
+  const populatedSections = GAP_SECTIONS.filter(
+    (section) => (report[section.key] || []).length,
+  ).length;
+  const emptySections = GAP_SECTIONS.length - populatedSections;
   const duration = formatDuration(
     Object.values(result?.timings || {}).reduce(
       (sum, value) => sum + (Number.isFinite(value) ? value : 0),
@@ -44,7 +48,7 @@ export function GapReport({ result, onOpenSources, onCitation }) {
       <Card className="overflow-hidden">
         <CardContent className="space-y-3 p-5">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">Gap analysis</Badge>
+            <Badge variant="secondary">Policy analysis</Badge>
             {result?.rounds != null ? (
               <Badge variant="outline">
                 {result.rounds} discussion {result.rounds === 1 ? "round" : "rounds"}
@@ -59,6 +63,26 @@ export function GapReport({ result, onOpenSources, onCitation }) {
           <p className="whitespace-pre-line text-sm leading-relaxed text-foreground/90">
             {report.summary || "The backend returned no summary for this analysis."}
           </p>
+          <p className="text-xs text-muted-foreground">
+            {totalGaps} evidence-backed {totalGaps === 1 ? "finding" : "findings"} across{" "}
+            {populatedSections} of {GAP_SECTIONS.length} categories
+            {emptySections
+              ? ` · ${emptySections} ${emptySections === 1 ? "category has" : "categories have"} no supported finding`
+              : ""}
+            .
+          </p>
+          {report.key_findings?.length ? (
+            <div className="rounded-md bg-muted/50 p-3">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Key findings
+              </p>
+              <ul className="list-disc space-y-1 pl-4 text-sm">
+                {report.key_findings.map((finding, index) => (
+                  <li key={index}>{finding}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="outline" size="sm" onClick={onOpenSources}>
@@ -75,26 +99,11 @@ export function GapReport({ result, onOpenSources, onCitation }) {
             ) : null}
           </div>
 
-          <div className="flex flex-wrap gap-2 border-t pt-3">
-            {Object.entries(STATUS_META).map(([key, meta]) => (
-              <span
-                key={key}
-                className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground"
-                title={meta.description}
-              >
-                <Badge variant={meta.variant}>{meta.label}</Badge>
-              </span>
-            ))}
-          </div>
         </CardContent>
       </Card>
 
-      <Accordion
-        type="multiple"
-        defaultValue={GAP_SECTIONS.map((section) => section.key)}
-        className="space-y-3"
-      >
-        {GAP_SECTIONS.map((section) => {
+      <Accordion type="multiple" className="space-y-3">
+        {GAP_SECTIONS.filter((section) => (report[section.key] || []).length).map((section) => {
           const gaps = report[section.key] || [];
           const Icon = SECTION_ICONS[section.key];
           return (
@@ -122,16 +131,21 @@ export function GapReport({ result, onOpenSources, onCitation }) {
                       />
                     ))}
                   </div>
-                ) : (
-                  <p className="rounded-md bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
-                    No gaps reported in this category for the supplied documents.
-                  </p>
-                )}
+                ) : null}
               </AccordionContent>
             </AccordionItem>
           );
         })}
       </Accordion>
+
+      {totalGaps === 0 ? (
+        <Card>
+          <CardContent className="p-5 text-sm text-muted-foreground">
+            No evidence-backed gaps were found in the supplied documents. That is a valid result;
+            the documents may not contain enough implementation detail to support a finding.
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

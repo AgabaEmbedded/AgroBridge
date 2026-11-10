@@ -19,8 +19,8 @@ from pypdf import PdfReader
 from services.embedding_service import embed_passages
 
 SUPPORTED_SUFFIXES = {".pdf", ".docx", ".txt", ".md"}
-CHUNK_SIZE = 1000
-CHUNK_OVERLAP = 150
+CHUNK_SIZE = 1600
+CHUNK_OVERLAP = 240
 
 _TYPE_KEYWORDS = (
     ("budget", "budget"),
@@ -72,14 +72,28 @@ def extract_pages(path: Path) -> list[tuple[int | None, str]]:
     """Return (page_number, text) pairs. Non-paginated formats use None."""
     suffix = path.suffix.lower()
     if suffix == ".pdf":
-        reader = PdfReader(str(path))
-        pages: list[tuple[int | None, str]] = []
-        for number, page in enumerate(reader.pages, start=1):
-            try:
-                pages.append((number, page.extract_text() or ""))
-            except Exception:
-                pages.append((number, ""))
-        return pages
+        # PDFium is far faster and more robust than pypdf on large/malformed policy PDFs.
+        try:
+            import pypdfium2 as pdfium
+
+            document = pdfium.PdfDocument(str(path))
+            pages: list[tuple[int | None, str]] = []
+            for index in range(len(document)):
+                page = document[index]
+                textpage = page.get_textpage()
+                pages.append((index + 1, textpage.get_text_range()))
+                textpage.close()
+                page.close()
+            return pages
+        except Exception:
+            reader = PdfReader(str(path))
+            pages = []
+            for number, page in enumerate(reader.pages, start=1):
+                try:
+                    pages.append((number, page.extract_text() or ""))
+                except Exception:
+                    pages.append((number, ""))
+            return pages
     if suffix == ".docx":
         document = Document(str(path))
         parts = [p.text for p in document.paragraphs if p.text.strip()]
@@ -148,6 +162,7 @@ def build_kb_records(kb: str, kb_dir: Path) -> list[dict[str, Any]]:
         except Exception:
             print(f"Skipping unreadable file: {path}")
             continue
+        print(f"{kb}: read {relative} ({len(pages)} page(s))", flush=True)
 
         for page_number, page_text in pages:
             text = clean_text(page_text)
@@ -213,6 +228,7 @@ def sync_collection(collection, records: list[dict[str, Any]], batch_size: int =
             metadatas=[record["metadata"] for record in batch],
             embeddings=embed_passages([record["text"] for record in batch]),
         )
+        print(f"  embedded {min(start + batch_size, len(missing))}/{len(missing)} new chunks", flush=True)
 
     return {
         "added": len(missing),

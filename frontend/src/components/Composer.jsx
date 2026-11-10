@@ -33,7 +33,7 @@ export function Composer({ onSubmit, pending, hasMessages }) {
         }`}
       >
         <label htmlFor="gap-question" className="sr-only">
-          Gap analysis question
+          Policy question
         </label>
         <Textarea
           id="gap-question"
@@ -44,7 +44,7 @@ export function Composer({ onSubmit, pending, hasMessages }) {
           onBlur={() => setFocused(false)}
           rows={3}
           maxLength={MAX_LENGTH}
-          placeholder="Ask about a policy area, e.g. livestock disease control, extension services, fertilizer subsidies…"
+          placeholder="Ask about a policy area, e.g. seed systems, extension services, fertilizer or irrigation…"
           className="resize-none border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
           disabled={pending}
         />

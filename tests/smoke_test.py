@@ -1,7 +1,7 @@
 """End-to-end smoke tests for the AgroBridge multi-agent workflows.
 
 Run from the project root:
-    python tests/smoke_test.py            # retrieval + QA + gap graphs
+    python tests/smoke_test.py            # retrieval + QA + Policy Analyzer
     python tests/smoke_test.py --graph qa # QA graph only
     python tests/smoke_test.py --graph gap
 
@@ -23,9 +23,12 @@ if str(ROOT) not in sys.path:
 
 import time
 
-from agents.gap_graph import run_gap_analysis
+from agents.gap_graph import run_policy_analysis
 from agents.qa_agents import UNAPPROVED_VOICE, finalize_node, revision_node
 from agents.qa_graph import route_after_verifier, run_question_answer
+from services.config import settings as _settings
+
+_settings.conversation_ai_enabled = False
 from agents.schemas import QaAnswer
 from services.audit_service import new_audit_id
 from services.config import settings
@@ -53,7 +56,7 @@ def test_retrieval() -> None:
     check(bool(kb1), f"KB1 has chunks ({kb1})")
     check(bool(kb2), f"KB2 has chunks ({kb2})")
 
-    hits1 = search_kb1("foot and mouth disease cattle", top_k=3)
+    hits1 = search_kb1("cassava mosaic disease", top_k=3)
     check(bool(hits1), "KB1 search returns hits")
     required = {"text", "citation", "document_id", "knowledge_base", "distance"}
     check(required.issubset(hits1[0]), "KB1 hits carry citation/document metadata")
@@ -71,7 +74,7 @@ def test_retrieval() -> None:
 async def test_qa() -> None:
     audit_id = new_audit_id()
     state = await run_question_answer(
-        "What are the signs of foot and mouth disease in cattle?",
+        "What are the signs of cassava mosaic disease?",
         history=[],
         conversation_id="smoke-qa",
         audit_id=audit_id,
@@ -83,7 +86,7 @@ async def test_qa() -> None:
 
     check(bool(final.get("voice_answer")), "QA produced a voice answer")
     check(
-        final["verification_status"] in {"APPROVED", "UNAPPROVED", "NEEDS_REVIEW"},
+        final["verification_status"] in {"APPROVED", "UNAPPROVED", "NEEDS_REVIEW", "NOT_REQUIRED"},
         f"QA verification status is valid ({final['verification_status']})",
     )
     check(bool(draft.get("answer")), "QA draft answer is non-empty")
@@ -108,9 +111,9 @@ async def test_qa() -> None:
 
 async def test_gap() -> None:
     audit_id = new_audit_id()
-    state = await run_gap_analysis(
-        "Identify gaps between Nigeria's agricultural extension policy and livestock "
-        "disease control needs",
+    state = await run_policy_analysis(
+        "How well does Nigeria's seed and extension policy match "
+        "what smallholder maize farmers need?",
         max_rounds=1,
         audit_id=audit_id,
         budget_seconds=settings.gap_timeout_seconds,
@@ -118,7 +121,7 @@ async def test_gap() -> None:
     report = state["synthesis"]
     messages = state.get("messages") or []
 
-    check(bool(report.get("summary")), "Gap analysis produced a summary")
+    check(bool(report.get("summary")), "Policy Analyzer produced a summary")
     for section in (
         "policy_coverage_gaps",
         "implementation_gaps",
@@ -127,9 +130,15 @@ async def test_gap() -> None:
     ):
         check(section in report, f"Gap report includes {section}")
     check(len(messages) >= 2, "Agents exchanged structured messages before synthesis")
+    all_gaps = [
+        gap
+        for key in ("policy_coverage_gaps", "implementation_gaps", "institutional_gaps", "evidence_gaps")
+        for gap in (report.get(key) or [])
+    ]
+    check(all(gap.get("citations") for gap in all_gaps), "Every reported gap has a citation")
     check(
-        all(message.get("sender") in {"GA1", "GA2"} for message in messages),
-        "Communication messages are labelled GA1/GA2",
+        all(message.get("sender") in {"PA", "CPA"} for message in messages),
+        "Communication messages are labelled PA/CPA",
     )
     policy_citations = _citations(state.get("policy_hits") or [])
     needs_citations = _citations(state.get("needs_hits") or [])
@@ -143,9 +152,9 @@ async def test_gap() -> None:
 
 
 async def test_revision_path() -> None:
-    hits = search_kb1("foot and mouth disease cattle", top_k=3)
+    hits = search_kb1("cassava mosaic disease", top_k=3)
     state = {
-        "question": "How do I treat foot and mouth disease in cattle?",
+        "question": "How do I treat cassava mosaic disease?",
         "draft": QaAnswer(
             answer="Mix any antibiotic at 20 ml per litre and spray the herd.",
             recommendations=["Use 20 ml/L antibiotic"],

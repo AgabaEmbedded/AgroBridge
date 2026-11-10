@@ -58,8 +58,8 @@ class NeedsFindings(BaseModel):
 
 
 class AgentMessage(BaseModel):
-    sender: Literal["GA1", "GA2"]
-    recipient: Literal["GA1", "GA2"]
+    sender: Literal["PA", "CPA"]
+    recipient: Literal["PA", "CPA"]
     intent: Literal["clarify", "confirm", "challenge", "request_evidence"]
     claims: list[str] = Field(default_factory=list)
     questions: list[str] = Field(default_factory=list)
@@ -74,7 +74,11 @@ class CommunicationReply(BaseModel):
 
 
 class GapItem(BaseModel):
-    gap_description: str
+    gap_description: str = Field(description="One plain-language sentence stating the gap")
+    plain_explanation: str = Field(
+        default="",
+        description="What this means and why it matters, in simple language for non-specialists",
+    )
     policy_commitment: str = ""
     practical_need: str = ""
     implementation_evidence: str = ""
@@ -85,7 +89,17 @@ class GapItem(BaseModel):
 
 
 class SynthesisReport(BaseModel):
-    summary: str = ""
+    summary: str = Field(
+        default="",
+        description=(
+            "Plain-language overview in 3-4 sentences (about 60-90 words): the overall finding, "
+            "what is and is not covered, what it means for crop farmers, and the main evidence limitation"
+        ),
+    )
+    key_findings: list[str] = Field(
+        default_factory=list,
+        description="Short plain-language takeaways; empty when evidence is insufficient",
+    )
     policy_coverage_gaps: list[GapItem] = Field(default_factory=list)
     implementation_gaps: list[GapItem] = Field(default_factory=list)
     institutional_gaps: list[GapItem] = Field(default_factory=list)
@@ -111,3 +125,56 @@ class VerificationVerdict(BaseModel):
     citations: list[str] = Field(default_factory=list)
     revision_instructions: list[str] = Field(default_factory=list)
     reasoning_summary: str = ""
+
+
+class CorrectedTranscript(BaseModel):
+    """Structured output for the ASR transcript normaliser."""
+
+    corrected_text: str = Field(description="Cleaned farmer question; unchanged if already clear")
+    crop: str | None = None
+    confidence: Confidence = "low"
+    notes: str = ""
+
+
+InterpretationStatus = Literal[
+    "CLEAR_INTENT",
+    "LIKELY_INTENT",
+    "AMBIGUOUS_INTENT",
+    "INSUFFICIENT_INPUT",
+]
+
+
+ConversationIntent = Literal[
+    "greeting",
+    "social",
+    "clarification",
+    "livestock",
+    "out_of_scope",
+    "crop_only",
+    "crop_question",
+    "crop_problem",
+    "general_crop_question",
+]
+
+
+class ConversationDecision(BaseModel):
+    intent: ConversationIntent
+    crop: str | None = None
+    interpreted_question: str | None = Field(
+        default=None,
+        description="Clean, context-resolved version of the farmer question; null for direct non-RAG replies",
+    )
+    topic: str | None = Field(default=None, description="Short agricultural topic, e.g. soil or planting")
+    objective: str | None = Field(default=None, description="What the farmer is trying to do")
+    interpretation_status: InterpretationStatus = "CLEAR_INTENT"
+    suspected_substitutions: list[str] = Field(default_factory=list)
+    clarification_question: str | None = Field(
+        default=None,
+        description="One targeted clarification question when interpretation is ambiguous",
+    )
+    direct_reply: str | None = Field(
+        default=None,
+        description="Short spoken reply for greetings, clarification and out-of-scope turns; null for crop RAG turns",
+    )
+    reason: str = ""
+    confidence: Confidence = "low"

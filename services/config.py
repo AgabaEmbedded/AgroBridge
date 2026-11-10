@@ -60,9 +60,9 @@ class Settings:
     temperature: float = field(default_factory=lambda: _env_float("LLM_TEMPERATURE", 0.2))
 
     # Retrieval.
-    top_k: int = field(default_factory=lambda: _env_int("TOP_K", 4))
+    top_k: int = field(default_factory=lambda: _env_int("TOP_K", 6))
     gap_top_k: int = field(default_factory=lambda: _env_int("GAP_TOP_K", 6))
-    min_relevance_distance: float = field(default_factory=lambda: _env_float("MIN_RELEVANCE_DISTANCE", 1.25))
+    min_relevance_distance: float = field(default_factory=lambda: _env_float("MIN_RELEVANCE_DISTANCE", 0.15))
 
     # Question-answer workflow.
     verifier_enabled: bool = field(default_factory=lambda: _env_bool("VERIFIER_ENABLED", True))
@@ -70,17 +70,47 @@ class Settings:
     qa_budget_seconds: float = field(default_factory=lambda: _env_float("QA_BUDGET_SECONDS", 4.3))
     qa_debug_budget_seconds: float = field(default_factory=lambda: _env_float("QA_DEBUG_BUDGET_SECONDS", 60.0))
 
-    # Gap-analysis workflow.
+    # Policy Analyzer workflow.
     gap_max_rounds: int = field(default_factory=lambda: _env_int("GAP_MAX_ROUNDS", 2))
     gap_timeout_seconds: float = field(default_factory=lambda: _env_float("GAP_TIMEOUT_SECONDS", 240.0))
-    gap_max_output_tokens: int = field(default_factory=lambda: _env_int("GAP_MAX_OUTPUT_TOKENS", 900))
+    gap_max_output_tokens: int = field(default_factory=lambda: _env_int("GAP_MAX_OUTPUT_TOKENS", 1200))
 
     # Conversation memory (voice turns).
     history_max_messages: int = field(default_factory=lambda: _env_int("HISTORY_MAX_MESSAGES", 8))
     history_ttl_seconds: float = field(default_factory=lambda: _env_float("HISTORY_TTL_SECONDS", 1800))
 
+    # Transcript robustness: an optional LLM normaliser before routing, and/or a prompt hint.
+    transcript_correction_enabled: bool = field(
+        default_factory=lambda: _env_bool("TRANSCRIPT_CORRECTION_ENABLED", True)
+    )
+    transcript_correction_timeout: float = field(
+        default_factory=lambda: _env_float("TRANSCRIPT_CORRECTION_TIMEOUT", 3.0)
+    )
+    noisy_transcript_hint: bool = field(
+        default_factory=lambda: _env_bool("NOISY_TRANSCRIPT_HINT", True)
+    )
+    conversation_ai_enabled: bool = field(
+        default_factory=lambda: _env_bool("CONVERSATION_AI_ENABLED", True)
+    )
+    conversation_ai_timeout: float = field(
+        default_factory=lambda: _env_float("CONVERSATION_AI_TIMEOUT", 2.0)
+    )
+    vapi_qa_budget_seconds: float = field(
+        default_factory=lambda: _env_float("VAPI_QA_BUDGET_SECONDS", 8.0)
+    )
+
     debug_api_token: str = field(default_factory=lambda: _env("DEBUG_API_TOKEN", ""))
     gap_api_token: str = field(default_factory=lambda: _env("GAP_API_TOKEN", ""))
+    # Vapi telephony integration.
+    vapi_public_base_url: str = field(default_factory=lambda: _env("VAPI_PUBLIC_BASE_URL", ""))
+    vapi_webhook_secret: str = field(default_factory=lambda: _env("VAPI_WEBHOOK_SECRET", ""))
+    vapi_custom_llm_secret: str = field(default_factory=lambda: _env("VAPI_CUSTOM_LLM_SECRET", ""))
+    elevenlabs_voice_id: str = field(
+        default_factory=lambda: (
+            _env("ELEVENLABS_VOICE_ID", "") or _env("ELEVENLAB_VOICE_ID", "")
+        ).strip()
+    )
+
     frontend_origins: list[str] = field(
         default_factory=lambda: [
             item.strip()

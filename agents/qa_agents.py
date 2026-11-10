@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 
 from agents import prompts
-from agents.evidence import format_evidence, sanitize_answer, sanitize_verification
+from agents.evidence import format_evidence, sanitize_answer, sanitize_spoken_text, sanitize_verification
 from agents.runtime import call_timeout, expired, timings_with
 from agents.schemas import (
     EvidenceItem,
@@ -18,11 +19,12 @@ from agents.schemas import (
 from services.audit_service import write_audit
 from services.config import settings
 from services.llm_service import LLMServiceError, chat_json
+from services.conversation import mentions_crop
 from services.retrieval_service import collection_count, search_kb1, search_kb2
 
 NO_EVIDENCE_ANSWER = (
     "I could not find reliable guidance for that question in my current information. "
-    "Which crop or animal is affected, and where are you farming?"
+    "What else can I help you with?"
 )
 RETRIEVAL_FALLBACK = (
     "I am having trouble checking the agricultural information right now. "
@@ -37,6 +39,38 @@ UNAPPROVED_VOICE = (
     "Please contact your local agricultural extension officer or veterinarian before acting on it."
 )
 REVIEW_CAVEAT = " Please confirm this with your local agricultural extension officer."
+
+# The model verifier is reserved for answers that can carry regulated or
+# policy-sensitive advice. General crop guidance still carries citations and a
+# source allow-list, but does not need a second model round-trip.
+_VERIFICATION_REQUIRED_RE = re.compile(
+    r"\b(?:pesticide|herbicide|insecticide|fungicide|nematicide|chemical|spray|"
+    r"spraying|dose|dosage|rate|fertilizer|fertiliser|urea|npk|withdrawal|poison|"
+    r"label|seed treatment|soil treatment)\b",
+    re.IGNORECASE,
+)
+
+
+def verification_required(question: str, draft: QaAnswer) -> bool:
+    text = " ".join(
+        [question, draft.answer, *[str(item) for item in (draft.recommendations or [])]]
+    )
+    return bool(_VERIFICATION_REQUIRED_RE.search(text))
+
+
+def answer_system_prompt() -> str:
+    if settings.noisy_transcript_hint:
+        return prompts.QA_ANSWER_SYSTEM + "\n\n" + prompts.NOISY_TRANSCRIPT_HINT
+    return prompts.QA_ANSWER_SYSTEM
+
+
+def insufficient_evidence_answer(crop: str | None) -> str:
+    if crop:
+        return (
+            f"I could not find specific guidance for {crop} in my current crop information. "
+            "To help, could you tell me the variety or growth stage, the region, and what you are seeing?"
+        )
+    return NO_EVIDENCE_ANSWER
 
 
 def _history_text(history: list[dict[str, str]] | None, limit: int = 8) -> str:
@@ -113,40 +147,68 @@ def _verification(status: str, summary: str, **extra) -> dict:
 async def agrobridge_node(state: dict) -> dict:
     started = time.monotonic()
     question = state["question"]
+    crop = state.get("crop")
+    query_parts = [crop or "", str(state.get("topic") or ""), question]
+    retrieval_query = " ".join(dict.fromkeys(part.strip() for part in query_parts if str(part).strip()))
     try:
-        hits = await asyncio.to_thread(search_kb1, question, None, state.get("top_k") or settings.top_k)
+        hits = await asyncio.to_thread(
+            search_kb1, retrieval_query, None, state.get("top_k") or settings.top_k
+        )
     except Exception:
         draft = QaAnswer(answer=RETRIEVAL_FALLBACK, confidence="low")
         return {
             "error": "retrieval_error",
             "draft": draft.model_dump(),
             "hits": [],
+            "retrieval_query": retrieval_query,
             "timings": timings_with(state, agrobridge_ms=(time.monotonic() - started) * 1000),
         }
 
     useful = [hit for hit in hits if hit["distance"] <= settings.min_relevance_distance]
+    if crop:
+        useful = [
+            hit
+            for hit in useful
+            if mentions_crop(hit.get("text", ""), crop)
+            or mentions_crop(str(hit.get("document_name", "")), crop)
+        ]
     if not useful:
-        draft = QaAnswer(answer=NO_EVIDENCE_ANSWER, confidence="low")
+        draft = QaAnswer(answer=insufficient_evidence_answer(crop), confidence="low")
         return {
-            "error": None,
+            "error": "insufficient_evidence",
             "draft": draft.model_dump(),
             "hits": hits,
+            "retrieval_query": retrieval_query,
             "timings": timings_with(state, agrobridge_ms=(time.monotonic() - started) * 1000),
         }
 
+    crop_line = (
+        f"Crop: {crop}\n\n"
+        if crop
+        else "Confirmed crop: none. Give general guidance only; do not name a specific crop as "
+        "the caller's crop. Ask which crop they are working with.\n\n"
+    )
     user = (
         f"{_history_text(state.get('history'))}"
+        f"{crop_line}"
         f"Farmer question: {question}\n\n"
         f"KB1 evidence:\n{format_evidence(useful)}\n\n"
-        "Answer using only this evidence. Copy citation labels exactly."
+        "Answer using only this evidence. Copy citation labels exactly. "
+        "Do not switch crops or give specific technical rates that the evidence does not contain."
     )
     try:
         draft = await chat_json(
-            prompts.QA_ANSWER_SYSTEM,
+            answer_system_prompt(),
             user,
             QaDraft,
             max_tokens=settings.qa_answer_max_tokens,
-            timeout=call_timeout(state, 0.55),
+            timeout=call_timeout(
+                state,
+                0.9
+                if state.get("correction_status") == "applied"
+                or state.get("intent") in {"crop_question", "crop_problem", "general_crop_question"}
+                else 0.55,
+            ),
         )
     except LLMServiceError:
         draft = QaAnswer(answer=LLM_FALLBACK, confidence="low")
@@ -154,15 +216,26 @@ async def agrobridge_node(state: dict) -> dict:
             "error": "llm_error",
             "draft": draft.model_dump(),
             "hits": useful,
+            "retrieval_query": retrieval_query,
             "timings": timings_with(state, agrobridge_ms=(time.monotonic() - started) * 1000),
         }
 
     answer, dropped = sanitize_answer(_answer_with_evidence(draft, useful), useful)
+    if not answer.citations:
+        fallback = QaAnswer(answer=insufficient_evidence_answer(crop), confidence="low")
+        return {
+            "error": "insufficient_evidence",
+            "draft": fallback.model_dump(),
+            "hits": useful,
+            "dropped_citations": dropped,
+            "timings": timings_with(state, agrobridge_ms=(time.monotonic() - started) * 1000),
+        }
     return {
         "error": None,
         "draft": answer.model_dump(),
         "hits": useful,
         "dropped_citations": dropped,
+        "retrieval_query": retrieval_query,
         "timings": timings_with(state, agrobridge_ms=(time.monotonic() - started) * 1000),
     }
 
@@ -178,10 +251,11 @@ async def verifier_node(state: dict) -> dict:
             "timings": timings_with(state, verifier_ms=(time.monotonic() - started) * 1000),
         }
 
-    if state.get("error") in {"retrieval_error", "llm_error"}:
+    if state.get("error") in {"retrieval_error", "llm_error", "insufficient_evidence"}:
         return {
             "verification": _verification(
-                "NEEDS_REVIEW", "Answer generation failed; nothing to verify."
+                "NEEDS_REVIEW",
+                "No sufficient KB1 evidence supported a specific answer; a clarification was requested.",
             ),
             "timings": timings_with(state, verifier_ms=(time.monotonic() - started) * 1000),
         }
@@ -198,6 +272,16 @@ async def verifier_node(state: dict) -> dict:
         return {
             "verification": _verification(
                 "NEEDS_REVIEW", "No policy documents are ingested in KB2."
+            ),
+            "timings": timings_with(state, verifier_ms=(time.monotonic() - started) * 1000),
+        }
+
+    if not verification_required(question, draft):
+        return {
+            "verification": _verification(
+                "NOT_REQUIRED",
+                "No regulated input, dosage or policy-sensitive claim was detected; "
+                "the answer remains evidence-grounded.",
             ),
             "timings": timings_with(state, verifier_ms=(time.monotonic() - started) * 1000),
         }
@@ -285,12 +369,15 @@ async def revision_node(state: dict) -> dict:
             "timings": timings_with(state, revision_ms=(time.monotonic() - started) * 1000),
         }
 
-    query = (
-        state["question"]
-        + " "
-        + " ".join(verification.get("policy_conflicts") or [])
-        + " "
-        + " ".join(verification.get("revision_instructions") or [])
+    query = " ".join(
+        part
+        for part in (
+            state.get("crop") or "",
+            state["question"],
+            " ".join(verification.get("policy_conflicts") or []),
+            " ".join(verification.get("revision_instructions") or []),
+        )
+        if part
     )
     hits = list(state.get("hits") or [])
     try:
@@ -313,7 +400,7 @@ async def revision_node(state: dict) -> dict:
     )
     try:
         revised_draft = await chat_json(
-            prompts.REVISION_SYSTEM,
+            answer_system_prompt().replace(prompts.QA_ANSWER_SYSTEM, prompts.REVISION_SYSTEM),
             user,
             QaDraft,
             max_tokens=settings.qa_answer_max_tokens,
@@ -342,17 +429,81 @@ def finalize_node(state: dict) -> dict:
     draft = state.get("draft") or {}
     verification = state.get("verification") or {}
     status = verification.get("status") or "NEEDS_REVIEW"
-    answer = str(draft.get("answer") or "").strip()
+    answer = sanitize_spoken_text(str(draft.get("answer") or ""))
+    intent = state.get("intent")
+    direct_answer = sanitize_spoken_text(str(state.get("direct_answer") or ""))
+    interpretation = {
+        "interpreted_question": state.get("interpreted_question"),
+        "interpretation_status": state.get("interpretation_status"),
+        "suspected_substitutions": state.get("suspected_substitutions") or [],
+        "topic": state.get("topic"),
+        "objective": state.get("objective"),
+        "pending_clarification": state.get("pending_clarification"),
+        "previous_clarification": state.get("previous_clarification"),
+        "clarification_attempts": state.get("clarification_attempts") or 0,
+    }
 
-    if status == "APPROVED":
+    if direct_answer:
+        final = {
+            "answer": direct_answer,
+            "voice_answer": direct_answer,
+            "verification_status": "NOT_REQUIRED",
+            "citations": [],
+            "confidence": "high",
+            "revisions": 0,
+            "note": f"Conversational response ({intent}); no retrieval or policy verification required.",
+            "error": None,
+            "intent": intent,
+            "crop": state.get("crop"),
+            "raw_question": state.get("raw_question") or state.get("question", ""),
+            "corrected_question": state.get("corrected_question") or state.get("question", ""),
+            "correction_status": state.get("correction_status"),
+            "correction": state.get("correction") or {},
+            **interpretation,
+        }
+        write_audit(
+            "question_answer",
+            {
+                "question": state.get("raw_question") or state.get("question", ""),
+                "corrected_question": state.get("corrected_question") or state.get("question", ""),
+                "correction_status": state.get("correction_status"),
+                "correction": state.get("correction") or {},
+                **interpretation,
+                "conversation_id": state.get("conversation_id"),
+                "intent": intent,
+                "crop": state.get("crop"),
+                "agents_invoked": ["conversation_router"],
+                "knowledge_bases": [],
+                "retrieved_citations": [],
+                "policy_citations": [],
+                "draft": {"answer": direct_answer, "citations": []},
+                "verification": {},
+                "revisions": 0,
+                "final": final,
+                "timings": state.get("timings") or {},
+                "dropped_citations": [],
+            },
+            state.get("audit_id"),
+        )
+        return {"final": final}
+
+    if status in {"APPROVED", "NOT_REQUIRED"}:
         voice_answer = answer
-        note = "Verified against KB2 policy evidence."
+        note = (
+            "Verified against KB2 policy evidence."
+            if status == "APPROVED"
+            else "No regulated input, dosage or policy-sensitive claim was detected; "
+            "the answer remains evidence-grounded."
+        )
     elif status == "UNAPPROVED":
         voice_answer = UNAPPROVED_VOICE
         note = "Unapproved after the revision limit; the farmer receives a safe referral instead."
     elif state.get("error") in {"retrieval_error", "llm_error"}:
         voice_answer = answer
         note = "Answer generation failed; fallback returned."
+    elif state.get("error") == "insufficient_evidence":
+        voice_answer = answer
+        note = "Insufficient KB1 evidence; a useful clarification was requested."
     else:
         voice_answer = answer + (REVIEW_CAVEAT if answer and REVIEW_CAVEAT.strip() not in answer else "")
         note = verification.get("reasoning_summary") or "Unverified; uncertainty communicated."
@@ -366,15 +517,29 @@ def finalize_node(state: dict) -> dict:
         "revisions": int(state.get("revisions") or 0),
         "note": note,
         "error": state.get("error"),
+        "intent": intent,
+        "crop": state.get("crop"),
+        "raw_question": state.get("raw_question") or state.get("question", ""),
+        "corrected_question": state.get("corrected_question") or state.get("question", ""),
+        "correction_status": state.get("correction_status"),
+        "correction": state.get("correction") or {},
+        **interpretation,
     }
 
     audit_record = {
-        "question": state.get("question", ""),
+        "question": state.get("raw_question") or state.get("question", ""),
+        "corrected_question": state.get("corrected_question") or state.get("question", ""),
+        "correction_status": state.get("correction_status"),
+        "correction": state.get("correction") or {},
+        **interpretation,
         "conversation_id": state.get("conversation_id"),
+        "intent": intent,
+        "crop": state.get("crop"),
         "agents_invoked": ["agrobridge"]
         + (["verifier"] if settings.verifier_enabled else [])
         + (["revision"] * int(state.get("revisions") or 0)),
         "knowledge_bases": ["KB1", "KB2"] if state.get("policy_hits") else ["KB1"],
+        "retrieval_query": state.get("retrieval_query"),
         "retrieved_citations": [hit.get("citation") for hit in state.get("hits") or []],
         "policy_citations": [hit.get("citation") for hit in state.get("policy_hits") or []],
         "draft": draft,

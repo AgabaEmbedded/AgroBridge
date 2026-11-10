@@ -2,22 +2,22 @@ export const GAP_SECTIONS = [
   {
     key: "policy_coverage_gaps",
     title: "Policy coverage gaps",
-    description: "Practical needs that existing commitments do not adequately address.",
+    description: "Things farmers need that current policy commitments do not address.",
   },
   {
     key: "implementation_gaps",
     title: "Implementation gaps",
-    description: "Commitments where the available evidence shows incomplete delivery.",
+    description: "Policy commitments where the available evidence shows incomplete delivery.",
   },
   {
     key: "institutional_gaps",
     title: "Institutional gaps",
-    description: "Unclear, overlapping or missing responsibilities and coordination.",
+    description: "Places where it is unclear who is responsible or how institutions coordinate.",
   },
   {
     key: "evidence_gaps",
     title: "Evidence gaps",
-    description: "Areas where the supplied documents cannot establish implementation.",
+    description: "Areas where the supplied documents do not show whether implementation happened.",
   },
 ];
 
@@ -57,8 +57,8 @@ export function formatDuration(ms) {
 
 export function timingEntries(timings) {
   const labels = {
-    ga1_ms: "GA1 policy analysis",
-    ga2_ms: "GA2 needs analysis",
+    pa_ms: "PA policy analysis",
+    cpa_ms: "CPA crop-production analysis",
     communication_ms: "Agent communication",
     synthesis_ms: "Synthesis",
   };

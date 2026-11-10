@@ -15,12 +15,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
-from agents.gap_graph import run_gap_analysis
+from agents.gap_graph import run_policy_analysis
 from agents.qa_graph import run_question_answer
 from services.audit_service import new_audit_id
 from services.config import settings
 from services.embedding_service import dimension, warmup
 from services.retrieval_service import collection_count
+from services.vapi_service import router as vapi_router, vapi_chat_completions, vapi_webhook
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
@@ -196,13 +197,16 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="AgroBridge", version="0.2.0", lifespan=lifespan)
+app.include_router(vapi_router)
+# Accept the custom-LLM URL with or without the appended /chat/completions path.
+app.add_api_route("/vapi", vapi_chat_completions, methods=["POST"], include_in_schema=False)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.frontend_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Gap-Token", "X-Debug-Token"],
+    allow_headers=["Content-Type", "X-Policy-Token", "X-Gap-Token", "X-Debug-Token"],
 )
 
 
@@ -282,6 +286,12 @@ async def debug_ask(request: Request) -> JSONResponse:
         "stage": final.get("verification_status") or state.get("error") or "NEEDS_REVIEW",
         "answer": final.get("answer") or draft.get("answer") or "",
         "voice_answer": final.get("voice_answer") or "",
+        "intent": final.get("intent") or state.get("intent"),
+        "crop": final.get("crop") or state.get("crop"),
+        "raw_question": final.get("raw_question") or state.get("raw_question") or question,
+        "corrected_question": final.get("corrected_question") or state.get("corrected_question") or state.get("question"),
+        "correction": state.get("correction") or final.get("correction") or {},
+        "correction_status": state.get("correction_status"),
         "citations": final.get("citations") or [],
         "draft": draft,
         "verification": verification,
@@ -315,12 +325,11 @@ async def debug_ask(request: Request) -> JSONResponse:
     return JSONResponse(result)
 
 
-@app.post("/api/gap-analysis")
-async def gap_analysis(request: Request) -> JSONResponse:
-    """Run the independent gap-analysis graph (KB2 policy + KB1 needs + communication)."""
-    if settings.gap_api_token and not secrets.compare_digest(
-        request.headers.get("x-gap-token", ""), settings.gap_api_token
-    ):
+@app.post("/api/policy-analyzer")
+async def policy_analyzer(request: Request) -> JSONResponse:
+    """Run the Policy Analyzer workflow (KB2 policy + KB1 needs + communication)."""
+    token = request.headers.get("x-policy-token") or request.headers.get("x-gap-token", "")
+    if settings.gap_api_token and not secrets.compare_digest(token, settings.gap_api_token):
         raise HTTPException(status_code=403, detail="Invalid or missing X-Gap-Token.")
 
     data = await read_payload(request)
@@ -339,14 +348,14 @@ async def gap_analysis(request: Request) -> JSONResponse:
 
     audit_id = new_audit_id()
     try:
-        state = await run_gap_analysis(query, max_rounds=max_rounds, audit_id=audit_id)
+        state = await run_policy_analysis(query, max_rounds=max_rounds, audit_id=audit_id)
     except Exception:
-        logger.exception("Gap-analysis workflow failed")
-        raise HTTPException(status_code=502, detail="Gap-analysis workflow failed.") from None
+        logger.exception("Policy Analyzer workflow failed")
+        raise HTTPException(status_code=502, detail="Policy Analyzer workflow failed.") from None
 
     report = state.get("synthesis") or {}
     if not report:
-        raise HTTPException(status_code=502, detail="Gap-analysis produced no report.")
+        raise HTTPException(status_code=502, detail="Policy Analyzer produced no report.")
 
     return JSONResponse(
         {
@@ -364,12 +373,16 @@ async def gap_analysis(request: Request) -> JSONResponse:
 
 
 @app.post("/")
-async def handle_voicebip_webhook(request: Request):
+async def handle_telephony_webhook(request: Request):
     data = await read_payload(request)
+    # Vapi posts {"message": {"type": ...}} to the Server URL. Delegate those events while
+    # keeping the legacy telephony webhook contract on the same root path.
+    if isinstance(data.get("message"), dict) and data["message"].get("type"):
+        return await vapi_webhook(request)
     event_type = data.get("event") or data.get("event_type")
     key = conversation_key(data)
     logger.info(
-        "Received Voicebip event: %s (memory: %s)", event_type, "keyed" if key else "stateless"
+        "Received telephony event: %s (memory: %s)", event_type, "keyed" if key else "stateless"
     )
 
     if event_type in {"call.initiated", "call.completed", "call.barge_in"}:

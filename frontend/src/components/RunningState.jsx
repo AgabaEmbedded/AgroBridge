@@ -3,7 +3,7 @@ import { Loader2, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
-const STEPS = ["GA1 · Policy", "GA2 · Needs", "Agent discussion", "Synthesis"];
+const STEPS = ["Policy review", "Farmer needs", "Discussion", "Synthesis"];
 
 export function RunningState({ startedAt, onCancel }) {
   const [elapsed, setElapsed] = useState(0);
@@ -21,7 +21,7 @@ export function RunningState({ startedAt, onCancel }) {
         <div className="flex items-center gap-3">
           <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">Running gap analysis…</p>
+            <p className="text-sm font-medium">Running policy analysis…</p>
             <p className="text-xs text-muted-foreground">
               {elapsed}s elapsed · the backend processes this run as one request
             </p>
