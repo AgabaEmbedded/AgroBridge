@@ -12,7 +12,7 @@
 | Requirement | Status | Evidence | What is missing / risk |
 |---|---|---|---|
 | **1. Innovative AI application in a domain** | **Partially addressed** | Voice crop-production assistant, retrieval-grounded answers, independent policy verifier, policy-gap workspace; live Vapi path verified with supplied examples. | The report claims only crop production; livestock is out of scope. No formal farmer-usability study or benchmark. |
-| **2. Country-specific knowledge base** | **Partially addressed** | 116-document catalogue (8,900 pages); 77 catalogued KB1 documents / 6,743 active chunks (68 documents); page-aware 1,600-character chunks with 240 overlap; metadata, E5 embeddings, ChromaDB; citations. | **Active KB2 has only 6 budget/performance documents (4,194 chunks); five are catalogued, so 34 of 39 catalogued KB2 documents are not active.** KB1 is also partial: 68 of 77 catalogued documents are indexed, with nine aquaculture documents missing. This is the most important submission weakness. |
+| **2. Country-specific knowledge base** | **Addressed** | 107-document catalogue (8,621 pages); KB1 68/68 catalogued documents and 9,813 chunks; KB2 41 active document names (39 catalogued plus two variants) and 17,920 chunks; page-aware 1,600-character chunks with 240 overlap; metadata, E5 embeddings, ChromaDB; citations. | Scope is crop production; no KB1 catalogue gap remains. |
 | **3. Use of ITU reference code for KB creation** | **Not addressed / unverified** | The project has its own ingestion pipeline and metadata catalogue. | No evidence that `CrashingGuru/ITUAIReadiness` was used or mapped. Do not claim it. If time permits, document the mapping or explicitly state the independent implementation. |
 | **4. Innovative AI solution role** | **Fully addressed** | Conversation router, contextual ASR interpretation, KB1 answer agent, citation-constrained speech, voice path. | No human evaluation; English-only voice path. |
 | **5. Policy and legal adviser role** | **Partially addressed** | KB2 verifier returns APPROVED / UNAPPROVED / NEEDS_REVIEW; safe referral; policy-gap graph. | Policy/legal coverage is only as broad as the active KB2 index; no formal legal review; no jurisdiction-specific rule engine. |
@@ -27,7 +27,7 @@
 | **14. Global best practices** | **Partially addressed** | FAO/WHO pesticide code; OECD AI Principles; ITU Y.3172 and AI Readiness 2.0. | No structured comparative review of country programmes; examples are not tested for transferability. |
 | **15. Technical report ≤5 pages** | **Fully addressed** | DOCX exports to 4 PDF pages; sections, tables, figure, references included. | Confirm final Word rendering on the organiser’s machine; Word’s internal page count during one check was inconsistent with the exported PDF, so the PDF page count is used as verification. |
 | **16. GitHub repository** | **Presumably available** | Local repo on branch `VAPI`; MIT licence; tests. | Confirm remote URL, public access, and exclude `.env`, logs, `resources/`, indexes and `documents/` as appropriate. |
-| **17. Knowledge-base materials** | **Partially addressed** | 116-document catalogue; 127 files in `documents/`; provenance and hashes. | Full KB2 reindex is outstanding; open-data publication/permissions not confirmed. |
+| **17. Knowledge-base materials** | **Partially addressed** | 107-document crop-production/policy catalogue; provenance, hashes and page metadata. | Open-data publication and document permissions are not confirmed. |
 | **18. Demo video** | **Not addressed** | No video produced. | Optional first round, required if shortlisted. Record a focused 5–7 minute demo. |
 
 ---
@@ -36,11 +36,10 @@
 
 ### Critical
 
-1. **Reindex the full KB2 policy corpus and verify counts before submission.**
-   - The catalogue describes 39 KB2 documents (4,864 pages), but the active Chroma collection currently contains six budget/performance documents.
-   - Run `python ingest.py --kb KB2`, verify `collection_count("KB2")` and list distinct `document_name` values.
-   - Re-run policy verifier and gap queries against NATIP, the National Agricultural Extension Policy, the NASC Act and the 2025 seed regulations.
-   - If reindexing cannot finish, keep the report’s current honest limitation and make it explicit in the demo.
+1. **Validate the rebuilt KB2 policy corpus against the key policy questions.**
+   - KB2 now has 17,920 chunks across 41 document names (39 catalogued plus two variants).
+   - Re-run the verifier and gap workflow against NATIP, the National Agricultural Extension Policy, the NASC Act and the 2025 seed regulations.
+   - Record whether results are retrievable and whether the cited passages support the claimed gap status; a full index does not by itself prove mapping quality.
 
 2. **Implement or stage a real progressive scenario runner.**
    - The report describes four stages; only stage 1 was executed live.
@@ -124,7 +123,7 @@
 ## E. Report limitations and compromises
 
 - **Five-page limit:** the report is four PDF pages, so there is room for one compact table if needed. The current version prioritises the requirement mapping and the progressive scenario over a separate full literature review.
-- **Policy corpus:** the report deliberately distinguishes the 116-document catalogue from the six active KB2 documents. This is less flattering but defensible.
+- **Policy corpus:** the catalogue now contains 107 crop-production and policy documents; KB2 is indexed (17,920 chunks), but policy-gap mapping quality still needs expert validation.
 - **Standards:** Y.3172 is presented as an architectural alignment, not formal conformance. No claim of certification is made.
 - **Scenario:** only stage 1 was executed live. Stages 2–4 are marked as expected/not executed. Do not present them as observed results.
 - **Voice performance:** the live 6.5 s example is an observation, not a benchmark; provider timeouts were observed and are disclosed in the review, not hidden.
@@ -138,8 +137,9 @@
 - [x] `submission/AgroBridge_Report_Review.md`
 - [x] Report exported to PDF and verified at 4 pages.
 - [x] Technical claims checked against current code: Vapi, Deepgram Nova-3, ElevenLabs, QA graph, verifier, gap graph, audit fields.
-- [x] Current KB counts verified: KB1 6,743 chunks / 68 active docs (77 catalogued); KB2 4,194 chunks / 6 docs.
-- [ ] Full KB2 policy/legal reindex and post-reindex verification.
+- [x] Current KB counts verified: KB1 9,813 chunks / 68 active docs (68 catalogued); KB2 17,920 chunks / 41 document names.
+- [x] Out-of-scope documents removed from the catalogue, import mapping, workbook and report.
+- [ ] Policy-gap outputs validated against the full KB2 corpus.
 - [ ] Team leader/member/contact details and public GitHub URL inserted.
 - [ ] GitHub repository cleaned of secrets, logs, resources, indexes and local data.
 - [ ] Demo video recorded (optional first round; required if shortlisted).
@@ -150,6 +150,6 @@
 
 ## G. Three most urgent actions
 
-1. **Reindex and verify the full KB2 policy corpus**, then re-run the policy verifier and gap workflow. This is the largest gap between the report’s design and the current active system.
+1. **Validate the full KB2 policy corpus**, then re-run the policy verifier and gap workflow. Index coverage is now present; mapping quality is the remaining question.
 2. **Implement and record a real progressive scenario** with stage IDs, event timing, agent recipients and audit entries; do not rely on the table alone.
 3. **Add the official team/GitHub details** and **record a concise demo** showing the voice path, an ambiguous ASR recovery, the verifier, and the policy gap workflow.
