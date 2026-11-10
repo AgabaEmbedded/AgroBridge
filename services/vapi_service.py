@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import secrets
 import time
 import uuid
@@ -65,7 +66,13 @@ def assistant_config(request: Request) -> dict[str, Any]:
             "provider": "11labs",
             "model": "eleven_flash_v2_5",
             "voiceId": settings.elevenlabs_voice_id,
-            "optimizeStreamingLatency": 4,
+            "stability": 0.8,
+            "similarityBoost": 0.75,
+            "style": 0,
+            "useSpeakerBoost": True,
+            "speed": 1,
+            "optimizeStreamingLatency": 3,
+            "autoMode": False,
         }
     return assistant
 
@@ -232,9 +239,10 @@ async def vapi_chat_completions(request: Request):
 
     async def stream():
         yield event({"role": "assistant"})
-        # The graph returns a complete answer; chunk it for the OpenAI SSE contract.
-        for start in range(0, len(answer), 40):
-            yield event({"content": answer[start : start + 40]})
+        # Stream word deltas in one assistant turn. Do not create extra messages
+        # per sentence: Vapi may synthesize each one independently.
+        for token in re.findall(r"\S+\s*", answer):
+            yield event({"content": token})
         yield event({}, "stop")
         yield "data: [DONE]\n\n"
 

@@ -22,7 +22,8 @@ def sanitize_spoken_text(text: str) -> str:
     cleaned = _INTERNAL_REFERENCE_RE.sub(" ", str(text or ""))
     cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
     cleaned = re.sub(r"([.!?])\s*([.!?])+", r"\1", cleaned)
-    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    cleaned = re.sub(r"(?m)^\s*(?:[-*•]|\d+[.)])\s*", "", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned)
     return cleaned.strip(" ,;:")
 
 
