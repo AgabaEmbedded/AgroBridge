@@ -37,3 +37,5 @@ node_modules/
 .DS_Store
 Thumbs.db
 description.docx
+# large demo video; keep local only
+submission/Demo.mp4
