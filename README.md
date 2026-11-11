@@ -132,14 +132,73 @@ evidence, institution and citations. Missing evidence is not treated as proof th
 
 ## Knowledge bases and ingestion
 
-```text
-documents/KB1/                 crop-production material
-documents/KB2/                 policy and delivery evidence
-documents/KB2/digital_policies/  AI, data-protection and digital-economy policies
-```
+The current catalogue contains **112 active documents**: **68 in KB1 (crop production)** and **44 in KB2 (policy knowledge base)**.
+
+| Knowledge base | Scope | Documents |
+|---|---|---:|
+| **KB1** | Crop-production and related field references | **68** |
+| **KB2** | Policy, legal, institutional, budget and implementation evidence | **44** |
+| **Total** |  | **112** |
+
+### KB1 document breakdown
+
+| Category | Documents |
+|---|---:|
+| Crop production | 19 |
+| Animal health / livestock reference | 14 |
+| Pests and diseases | 10 |
+| Water management | 7 |
+| Seeds and varieties | 5 |
+| Extension | 3 |
+| Mechanisation | 3 |
+| Research and statistics | 3 |
+| Soil and fertiliser | 3 |
+| Climate and environment | 1 |
+| **Total** | **68** |
+
+KB1 includes legacy animal-health references, but the product scope is crop production; livestock
+questions are redirected outside the service.
+
+### KB2 document breakdown
+
+| Category | Documents |
+|---|---:|
+| Implementation reports | 10 |
+| National policies | 9 |
+| Budgets and statistics | 6 |
+| International frameworks | 6 |
+| Laws and regulations | 6 |
+| Institutional mandates | 4 |
+| Digital, data-protection and AI policies | 3 |
+| **Total** | **44** |
+
+### Where the documents come from
+
+The most common issuing organisations in the catalogue are:
+
+| Organisation | Documents |
+|---|---:|
+| National Agricultural Extension and Research Liaison Services (NAERLS) | 31 |
+| Federal Ministry of Agriculture and Food Security (FMAFS), including partner variants | 9 |
+| International Institute of Tropical Agriculture (IITA), including Feed the Future variants | 8 |
+| Food and Agriculture Organization (FAO) | 7 |
+| National Agricultural Seeds Council (NASC) | 6 |
+| Federal Republic of Nigeria | 3 |
+| Other government, research, development and international sources | 48 |
+
+The catalogue includes extension bulletins, production guides, technical manuals, research reports,
+national policies, laws, regulations, budgets, implementation reports and international frameworks.
+Most materials are Nigerian; 86 records are Nigeria-specific, 20 are global frameworks or
+comparators and 3 are Africa-wide and 3 unknown geography.
+
+For More information refere to /metadata
+
+
+### Ingestion
 
 Chunks are content-addressed, so ingestion is incremental: unchanged chunks are not re-embedded,
-and chunks for edited/deleted files are removed.
+and chunks for edited or deleted files are removed.
+103 documents have extractable text; 9 use OCR for text extranction.
 
 ```bash
 python ingest.py                  # sync KB1 and KB2
@@ -147,18 +206,6 @@ python ingest.py --kb KB1         # one knowledge base
 python ingest.py --kb KB2         # one knowledge base
 python ingest.py --drop-legacy    # remove the old single-collection index
 ```
-
-Document processing:
-
-- PDFs keep page numbers; DOCX/TXT/Markdown do not.
-- Chunk size is 1,600 characters with 240-character overlap.
-- Each chunk stores document, page, chunk, year, status, category and source metadata.
-- Optional sidecar `<file>.meta.json` can override metadata.
-- Scanned PDFs, OCR was applied to extract text; files with no extractable text are skipped.
-
-Embeddings use `intfloat/multilingual-e5-small` locally (384 dimensions). The index is independent
-of the generation model.
-
 ## Configuration
 
 All settings are in `.env`; see `.env.example` for the full list.
@@ -243,21 +290,6 @@ Phone number displayed in the UI: **+1 405 716 9054**.
 
 The Vapi phone number's **Server URL** should point to the public base of this service. Vapi sends
 `assistant-request`; AgroBridge returns a transient assistant with:
-
-
-## Tests
-
-```bash
-python tests/test_conversation.py
-python tests/test_transcript_resilience.py
-python tests/smoke_test.py --graph qa
-python tests/smoke_test.py --graph gap
-```
-
-- `test_conversation.py` checks routing, context and direct replies without requiring the LLM.
-- `test_transcript_resilience.py` checks ASR recovery, ambiguous turns, clarification and spoken
-  output safety.
-- `smoke_test.py` is an integration test and calls the real embedding and generation services.
 
 ## License
 
