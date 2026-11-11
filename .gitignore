@@ -15,7 +15,6 @@ chroma_db.*/
 candidate_documents/
 Download docs/
 resources/
-*.pdf
 
 # Logs and runtime output
 logs/
