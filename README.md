@@ -1,13 +1,13 @@
 # AgroBridge
 
-AgroBridge gives crop farmers a direct way to reach a trusted agricultural AI over a normal phone
+AgroBridge gives crop farmers a direct way to reach a trusted agricultural AI without the requirement of having internet or smart phone, over a normal phone
 call. The farmer speaks in a familiar language and hears a short, evidence-based answer. No
-smartphone, app, account or data plan is required on the farmer's side.
+smartphone, app, account or data plan is required on the farmer's side simply bridging local farmers to AI.
 
 A separate Policy Analyzer workflow compares crop-production needs with Nigerian policy,
 institutional and delivery evidence. It is used by analysts and programme staff, not by callers.
 
-The system focus is crop production. Livestock questions are redirected outside the product.
+The system focus on the crop production part of Farming. Livestock questions are are out of scope for now and redirected outside the product.
 
 ## What is in the repository
 
@@ -93,19 +93,19 @@ Policy Analyzer
 
 ### Phone QA agent
 
-A caller reaches the Vapi assistant. Vapi returns a transient assistant configuration from the
-webhook and sends each turn to the OpenAI-compatible custom-LLM endpoint. The turn is processed by
+A caller reaches the Vapi assistant. Vapi returns an assistant configuration from the
+webhook and sends each turn to the FastAPI Server. The turn is processed by
 the QA graph:
 
 - The conversation router handles greetings, short answers, likely speech-recognition errors,
-  pending crop questions and clear crop questions.
+  pending crop questions and clear crop questions routing them to the right agent.
 - Clear greetings and crop questions with an explicit topic use a deterministic fast path and skip
   the AI router.
 - The answer agent retrieves evidence from KB1 and writes a short, citation-bound answer.
 - The verifier checks policy and safety. General, low-risk answers skip the verifier model call and
   return `NOT_REQUIRED`; pesticide, fertilizer, dose, rate and related advice still run the KB2
   verifier.
-- Unapproved advice is revised or replaced with a safe referral.
+- Unapproved advice is revised or replaced with a safe referral to extension officer.
 - Final speech is stripped of document names, page numbers, chunk IDs and citation labels.
 
 The target voice scope is English, Nigerian Pidgin, Hausa, Igbo and Yoruba with natural
@@ -148,18 +148,13 @@ python ingest.py --kb KB2         # one knowledge base
 python ingest.py --drop-legacy    # remove the old single-collection index
 ```
 
-Important: chunk IDs depend on the chunking configuration. If `chroma_db` was built elsewhere
-(for example on Colab with different chunk settings), the local chunk IDs will not match. In that
-case ingestion treats the old chunks as stale and rebuilds them. Check the collection counts before
-running a full sync.
-
 Document processing:
 
 - PDFs keep page numbers; DOCX/TXT/Markdown do not.
 - Chunk size is 1,600 characters with 240-character overlap.
 - Each chunk stores document, page, chunk, year, status, category and source metadata.
 - Optional sidecar `<file>.meta.json` can override metadata.
-- Scanned PDFs need OCR; files with no extractable text are skipped.
+- Scanned PDFs, OCR was applied to extract text; files with no extractable text are skipped.
 
 Embeddings use `intfloat/multilingual-e5-small` locally (384 dimensions). The index is independent
 of the generation model.
@@ -177,7 +172,7 @@ All settings are in `.env`; see `.env.example` for the full list.
 | `MIN_RELEVANCE_DISTANCE` | `0.15` | cosine-distance cutoff |
 | `VERIFIER_ENABLED` | `true` | enable KB2 verification |
 | `MAX_REVISIONS` | `2` | revision limit |
-| `QA_BUDGET_SECONDS` | `4.3` | legacy telephony budget |
+| `QA_BUDGET_SECONDS` | `4.3` | legacy telephony budget in seconds |
 | `QA_DEBUG_BUDGET_SECONDS` | `60` | `/debug/ask` budget |
 | `VAPI_QA_BUDGET_SECONDS` | `8.0` | Vapi custom-LLM budget |
 | `GAP_MAX_ROUNDS` | `2` | PA/CPA exchange rounds |
@@ -195,8 +190,6 @@ All settings are in `.env`; see `.env.example` for the full list.
 | `ELEVENLABS_VOICE_ID` | empty | ElevenLabs voice ID |
 | `TRANSCRIPT_CORRECTION_ENABLED` | `true` | optional transcript clean-up |
 | `AUDIT_ENABLED` | `true` | write JSONL audit records |
-
-The ElevenLabs API key remains in the Vapi integration. Do not put it in this repository.
 
 ## API endpoints
 
@@ -251,28 +244,6 @@ Phone number displayed in the UI: **+1 405 716 9054**.
 The Vapi phone number's **Server URL** should point to the public base of this service. Vapi sends
 `assistant-request`; AgroBridge returns a transient assistant with:
 
-- a custom LLM at `{VAPI_PUBLIC_BASE_URL}/vapi`
-- AssemblyAI `universal-3-6-pro` transcription
-- ElevenLabs `11labs` voice settings pinned in code
-- the AgroBridge first message
-
-Vapi appends `/chat/completions` to the model URL. The endpoint accepts both `/vapi` and
-`/vapi/chat/completions` and supports JSON and SSE responses.
-
-Quick checks:
-
-```bash
-curl -X POST http://127.0.0.1:8000/vapi/webhook \
-  -H "Content-Type: application/json" \
-  -d '{"message":{"type":"assistant-request","call":{"id":"demo"}}}'
-
-curl -X POST http://127.0.0.1:8000/vapi/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"agrobridge","stream":false,"messages":[{"role":"user","content":"hello"}]}'
-```
-
-For a public tunnel, update `VAPI_PUBLIC_BASE_URL` whenever the ngrok/deployment host changes and
-restart the API. Keep Vapi server-event and custom-LLM secrets matched if they are enabled.
 
 ## Tests
 
@@ -287,42 +258,6 @@ python tests/smoke_test.py --graph gap
 - `test_transcript_resilience.py` checks ASR recovery, ambiguous turns, clarification and spoken
   output safety.
 - `smoke_test.py` is an integration test and calls the real embedding and generation services.
-
-## Troubleshooting
-
-**Windows native-library failure (`WinError 1114`, `c10.dll`, silent exit 5).** Install the latest
-Microsoft Visual C++ Redistributable (x64), or run `setup_windows_runtime.py` after installing
-requirements.
-
-**First request is slow.** Loading the local E5 model takes time on CPU. The lifespan hook warms it
-up; indexing all documents is also CPU-bound. There is no GPU requirement.
-
-**`indexed_chunks` looks wrong.** `/health` reports KB1 only. Add `kb1_chunks` and `kb2_chunks` for
-the total.
-
-**Ingestion re-embeds everything.** The index was probably built with different chunking or on
-another machine. Content-addressed IDs will not match. Check collection IDs before a full sync; a
-targeted append or a fresh rebuild may be preferable.
-
-**Chroma dimension mismatch.** This repository uses E5 384-dimensional vectors. An index built with
-another embedding model cannot be queried with this code.
-
-**The phone call cannot reach the API.** Check `VAPI_PUBLIC_BASE_URL`, the tunnel/process, and the
-Vapi Server URL. The assistant-request endpoint should return valid JSON.
-
-**Voice sounds uneven.** ElevenLabs settings are pinned in the transient assistant. If cadence is
-still uneven, inspect whether Vapi is splitting the response into multiple TTS segments; the
-custom LLM returns one streamed completion with word-level deltas.
-
-**No audit records.** Check `AUDIT_ENABLED` and the `logs/` directory permissions.
-
-## Security and data
-
-- `.env`, `resources/`, `documents/`, `chroma_db/`, `logs/` and tooling caches are git-ignored.
-- Caller identifiers used for memory are hashed; raw phone numbers are not stored.
-- Audio is not stored by AgroBridge.
-- Audit records retain question, sources, verification and final wording for review.
-- Do not expose `/debug/ask` or `/api/policy-analyzer` publicly without the corresponding tokens.
 
 ## License
 

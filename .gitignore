@@ -7,11 +7,10 @@ __pycache__/
 # Secrets and local configuration
 .env
 .env.*
+!.env.example
 
 # Vector index and knowledge-base corpora (large / review-gated)
-chroma_db/
 chroma_db.*/
-documents/
 candidate_documents/
 Download docs/
 resources/
@@ -38,4 +37,3 @@ node_modules/
 .DS_Store
 Thumbs.db
 description.docx
-submission/
